@@ -2,6 +2,10 @@
 
 満員電車を降りたサラリーマンが、限界寸前の状態で駅構内の迷路を走り、制限時間内にトイレへ到達するブラウザゲームです。
 
+## 公開URL
+
+https://nekoojisan-labo.github.io/toilet-gaman-game-3d/
+
 ## 実行
 
 `index.html` の直開きで動きます。
