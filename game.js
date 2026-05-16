@@ -16,7 +16,9 @@
   const PLAYER_MOVE_DURATION = 0.34;
   const PLAYER_BACK_DURATION = 0.44;
   const PLAYER_TURN_DURATION = 0.18;
-  const ASSET_VERSION = "run-v7";
+  const INPUT_REPEAT_DELAY = 0.1;
+  const INPUT_BLOCK_DELAY = 0.24;
+  const ASSET_VERSION = "run-v8";
 
   const DIRS = [
     { x: 1, z: 0, angle: 0 },
@@ -24,7 +26,7 @@
     { x: -1, z: 0, angle: Math.PI },
     { x: 0, z: -1, angle: -Math.PI / 2 },
   ];
-  const PLAYER_RUN_FRAMES = ["player-run-1", "player-run-2", "player-run-3", "player-run-4"];
+  const PLAYER_RUN_FRAMES = ["player-run-1", "player-run-2", "player-run-3"];
   const PLAYER_WORLD_HEIGHT = 1.34;
 
   const RAW_STAGES = [
@@ -210,35 +212,30 @@
     "player-run-1": "./assets/sprites/player-run-1.png",
     "player-run-2": "./assets/sprites/player-run-2.png",
     "player-run-3": "./assets/sprites/player-run-3.png",
-    "player-run-4": "./assets/sprites/player-run-4.png",
     "player-fall": "./assets/sprites/player-fall.png",
     "player-limit": "./assets/sprites/player-limit.png",
     "player-back-idle": "./assets/sprites/player-back-idle.png",
     "player-back-run-1": "./assets/sprites/player-back-run-1.png",
     "player-back-run-2": "./assets/sprites/player-back-run-2.png",
     "player-back-run-3": "./assets/sprites/player-back-run-3.png",
-    "player-back-run-4": "./assets/sprites/player-back-run-4.png",
     "player-back-limit": "./assets/sprites/player-back-limit.png",
     "player-back-fall": "./assets/sprites/player-back-fall.png",
     "player-front-idle": "./assets/sprites/player-front-idle.png",
     "player-front-run-1": "./assets/sprites/player-front-run-1.png",
     "player-front-run-2": "./assets/sprites/player-front-run-2.png",
     "player-front-run-3": "./assets/sprites/player-front-run-3.png",
-    "player-front-run-4": "./assets/sprites/player-front-run-4.png",
     "player-front-limit": "./assets/sprites/player-front-limit.png",
     "player-front-fall": "./assets/sprites/player-front-fall.png",
     "player-left-idle": "./assets/sprites/player-left-idle.png",
     "player-left-run-1": "./assets/sprites/player-left-run-1.png",
     "player-left-run-2": "./assets/sprites/player-left-run-2.png",
     "player-left-run-3": "./assets/sprites/player-left-run-3.png",
-    "player-left-run-4": "./assets/sprites/player-left-run-4.png",
     "player-left-limit": "./assets/sprites/player-left-limit.png",
     "player-left-fall": "./assets/sprites/player-left-fall.png",
     "player-right-idle": "./assets/sprites/player-right-idle.png",
     "player-right-run-1": "./assets/sprites/player-right-run-1.png",
     "player-right-run-2": "./assets/sprites/player-right-run-2.png",
     "player-right-run-3": "./assets/sprites/player-right-run-3.png",
-    "player-right-run-4": "./assets/sprites/player-right-run-4.png",
     "player-right-limit": "./assets/sprites/player-right-limit.png",
     "player-right-fall": "./assets/sprites/player-right-fall.png",
     "enemy-business-1": "./assets/sprites/enemy-business-1.png",
@@ -333,6 +330,7 @@
     moving: false,
     turning: false,
     queuedAction: null,
+    inputCooldown: 0,
     initialDistance: 1,
     currentDistance: 1,
     pointer: { x: 0, y: 0 },
@@ -586,13 +584,24 @@
     return state.player.moveDuration > 0 || state.player.turnDuration > 0;
   }
 
-  function tryAction(action) {
+  function heldAction() {
+    if (state.keys.left) return "left";
+    if (state.keys.right) return "right";
+    if (state.keys.forward) return "forward";
+    if (state.keys.back) return "back";
+    return null;
+  }
+
+  function tryAction(action, options = {}) {
     if (state.mode !== "playing") return;
+    if (options.repeat && state.inputCooldown > 0) return;
 
     if (isPlayerBusy()) {
-      state.queuedAction = action;
+      if (!options.repeat) state.queuedAction = action;
       return;
     }
+
+    if (options.repeat) state.inputCooldown = INPUT_REPEAT_DELAY;
 
     if (action === "left") {
       startTurn(-1);
@@ -629,6 +638,7 @@
 
     if (!isOpenCell(stage, nextX, nextZ)) {
       state.queuedAction = null;
+      state.inputCooldown = INPUT_BLOCK_DELAY;
       state.shake = Math.max(state.shake, 0.12);
       boardStatus.textContent = "壁に阻まれた";
       tone(118, 0.055, "square", 0.018);
@@ -651,6 +661,12 @@
     const action = state.queuedAction;
     state.queuedAction = null;
     tryAction(action);
+  }
+
+  function updateHeldInput() {
+    if (state.mode !== "playing" || isPlayerBusy() || state.queuedAction) return;
+    const action = heldAction();
+    if (action) tryAction(action, { repeat: true });
   }
 
   function showOverlay(type, options = {}) {
@@ -735,6 +751,7 @@
     state.moving = false;
     state.turning = false;
     state.queuedAction = null;
+    state.inputCooldown = 0;
     state.initialDistance = Math.max(1, cellDistance(stage, start, goal));
     state.currentDistance = state.initialDistance;
     state.enemies = buildEnemies(stage);
@@ -905,8 +922,10 @@
     state.hitTimer = Math.max(0, state.hitTimer - dt);
     state.slowTimer = Math.max(0, state.slowTimer - dt);
     state.shake = Math.max(0, state.shake - dt);
+    state.inputCooldown = Math.max(0, state.inputCooldown - dt);
 
     updatePlayer(stage, dt);
+    updateHeldInput();
     updateEnemies(stage, dt);
     checkEnemyHits(stage);
 
@@ -1540,7 +1559,8 @@
     ctx.fill();
     if (img) {
       const width = Math.max(height * (img.width / img.height), height * 0.5);
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       if (sprite.flip) {
         ctx.translate(x + width / 2, y - height + bob);
         ctx.scale(-1, 1);

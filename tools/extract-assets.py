@@ -453,9 +453,11 @@ def main() -> None:
     crop_portrait("face-normal", (860, 200, 1090, 430))
     crop_portrait("face-panic", (850, 485, 1094, 704))
     crop_portrait("face-limit", (835, 774, 1098, 990))
-    make_grounded_player_run_cycle()
-    make_directional_player_fallbacks()
-    make_generated_player_4dir_sprites()
+    if (SOURCE / "player-4dir-generated-sheet.png").exists():
+        make_generated_player_4dir_sprites()
+    else:
+        make_grounded_player_run_cycle()
+        make_directional_player_fallbacks()
     make_stain()
 
 

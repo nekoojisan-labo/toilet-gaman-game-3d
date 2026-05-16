@@ -66,8 +66,8 @@ http://localhost:8031/toilet-gaman-game/
 python3 toilet-gaman-game/tools/extract-assets.py
 ```
 
-主人公の4方向走行スプライトは `tools/generate_player_4dir_sprites.py` で、見本GIFに近いチビドットキャラとして生成します。
-走行4フレームは `接地A -> 通過 -> 接地B -> 通過` の順で、左右の腕脚と上下バウンドが切り替わる設計です。
+主人公の4方向走行スプライトは `assets/source/player-4dir-generated-sheet.png` を元に、`tools/generate_player_4dir_sprites.py` でアニメ調の透過PNGへ切り出します。
+走行は前・後・左・右の4方向、それぞれ3フレーム構成です。
 
 ```sh
 python3 toilet-gaman-game/tools/generate_player_4dir_sprites.py
