@@ -1,0 +1,15 @@
+.DS_Store
+Thumbs.db
+
+# Local/runtime files
+node_modules/
+.env
+.env.*
+
+# Python tool cache
+__pycache__/
+*.py[cod]
+
+# Editor/project local files
+.idea/
+.vscode/

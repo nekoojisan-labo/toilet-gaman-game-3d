@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" role="img" aria-label="周囲の乗客が嘲笑と哀れみの視線を向けている">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f4efe3"/>
+      <stop offset="1" stop-color="#d6d9dc"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#10151d" flood-opacity=".22"/>
+    </filter>
+  </defs>
+  <rect width="900" height="360" rx="38" fill="url(#bg)"/>
+  <path d="M18 258 C140 220 245 260 348 238 C503 205 584 264 738 226 C805 210 854 225 886 244 L886 360 L18 360Z" fill="#b7bec8" opacity=".35"/>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(82 80)">
+      <ellipse cx="70" cy="56" rx="46" ry="52" fill="#f0c99f"/>
+      <path d="M31 56 C38 6 100 1 113 50 C95 32 55 34 31 56Z" fill="#2f3033"/>
+      <path d="M46 72 Q70 91 94 72" fill="none" stroke="#70331c" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="54" cy="56" r="7" fill="#111821"/>
+      <circle cx="88" cy="56" r="7" fill="#111821"/>
+      <path d="M18 182 C20 120 42 96 70 96 C104 96 126 120 128 182Z" fill="#2c527b"/>
+      <path d="M36 143 L3 122" stroke="#f0c99f" stroke-width="18" stroke-linecap="round"/>
+      <path d="M105 143 L140 116" stroke="#f0c99f" stroke-width="18" stroke-linecap="round"/>
+      <path d="M128 108 Q160 86 187 100" fill="none" stroke="#24354c" stroke-width="10" stroke-linecap="round"/>
+      <text x="126" y="76" fill="#a04725" font-size="38" font-family="sans-serif" font-weight="700">w</text>
+    </g>
+
+    <g transform="translate(310 70)">
+      <ellipse cx="68" cy="60" rx="45" ry="52" fill="#ecc5a0"/>
+      <path d="M29 56 C40 10 98 5 112 58 C91 43 50 43 29 56Z" fill="#513926"/>
+      <circle cx="52" cy="58" r="6" fill="#111821"/>
+      <circle cx="85" cy="58" r="6" fill="#111821"/>
+      <path d="M51 82 Q68 74 88 82" fill="none" stroke="#7d3e24" stroke-width="7" stroke-linecap="round"/>
+      <path d="M18 187 C20 124 44 100 70 100 C103 100 126 124 128 187Z" fill="#d8c1a2"/>
+      <rect x="36" y="140" width="58" height="72" rx="12" fill="#f35d86"/>
+      <path d="M112 145 L170 178" stroke="#ecc5a0" stroke-width="18" stroke-linecap="round"/>
+      <path d="M166 178 L204 178" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+      <text x="126" y="38" fill="#475569" font-size="28" font-family="sans-serif" font-weight="700">え...</text>
+    </g>
+
+    <g transform="translate(535 76)">
+      <ellipse cx="70" cy="58" rx="45" ry="52" fill="#f1c49b"/>
+      <path d="M28 55 C37 9 101 3 116 55 C88 36 55 38 28 55Z" fill="#20242a"/>
+      <circle cx="54" cy="58" r="7" fill="#111821"/>
+      <circle cx="87" cy="58" r="7" fill="#111821"/>
+      <path d="M55 82 Q72 92 91 82" fill="none" stroke="#7f351d" stroke-width="8" stroke-linecap="round"/>
+      <path d="M18 184 C20 122 43 98 70 98 C103 98 126 122 128 184Z" fill="#1f2937"/>
+      <path d="M38 142 L3 184" stroke="#f1c49b" stroke-width="18" stroke-linecap="round"/>
+      <path d="M108 141 L164 162" stroke="#f1c49b" stroke-width="18" stroke-linecap="round"/>
+      <path d="M162 162 L205 151" stroke="#24354c" stroke-width="8" stroke-linecap="round"/>
+      <text x="126" y="66" fill="#ba3b2b" font-size="31" font-family="sans-serif" font-weight="700">うわ...</text>
+    </g>
+
+    <g transform="translate(742 96)">
+      <ellipse cx="54" cy="49" rx="36" ry="42" fill="#e8bc91"/>
+      <path d="M21 44 C30 7 80 3 92 46 C70 34 42 34 21 44Z" fill="#6b4e2f"/>
+      <circle cx="43" cy="50" r="5" fill="#111821"/>
+      <circle cx="68" cy="50" r="5" fill="#111821"/>
+      <path d="M42 70 Q55 64 70 70" fill="none" stroke="#78381e" stroke-width="6" stroke-linecap="round"/>
+      <path d="M12 154 C14 104 34 84 56 84 C84 84 103 105 105 154Z" fill="#58704a"/>
+      <path d="M90 113 L124 98" stroke="#e8bc91" stroke-width="14" stroke-linecap="round"/>
+      <text x="-8" y="32" fill="#334155" font-size="24" font-family="sans-serif" font-weight="700">かわいそう</text>
+    </g>
+  </g>
+
+  <g fill="none" stroke="#9b2c2c" stroke-width="5" stroke-linecap="round" opacity=".65">
+    <path d="M196 120 C258 142 318 150 386 164"/>
+    <path d="M500 136 C438 150 388 164 330 188"/>
+    <path d="M722 142 C630 162 550 185 456 218"/>
+  </g>
+</svg>

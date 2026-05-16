@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>トイレ我慢ゲーム</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./game.js" defer></script>
+  </head>
+  <body>
+    <main class="app" aria-label="トイレ我慢ゲーム">
+      <section class="cabinet" aria-label="ゲーム画面">
+        <canvas id="gameCanvas" width="760" height="430"></canvas>
+
+        <header class="hud" aria-label="ステータス">
+          <div class="stage-chip">
+            <span id="stageNo">STAGE 1</span>
+            <strong id="stageName">ホーム脱出</strong>
+          </div>
+          <div class="timer" id="timerBox" aria-live="polite">
+            <span>LIMIT</span>
+            <strong id="timeValue">40.0</strong>
+          </div>
+          <div class="meter-block">
+            <span>我慢</span>
+            <div class="meter"><i id="dignityFill"></i></div>
+          </div>
+          <div class="meter-block distance">
+            <span>到達</span>
+            <div class="meter"><i id="distanceFill"></i></div>
+          </div>
+          <img class="face" id="facePortrait" src="./assets/sprites/face-normal.png" alt="主人公の表情">
+          <button class="icon-button" id="pauseButton" type="button" aria-label="一時停止">II</button>
+        </header>
+
+        <div class="screen-layer active" id="screenLayer" data-screen="title" aria-hidden="false">
+          <div class="title-panel">
+            <p class="kicker">満員電車後の尊厳防衛戦</p>
+            <h1>トイレ我慢ゲーム</h1>
+            <p class="screen-copy" id="screenCopy">TPS視点で駅構内の迷路を走り、トイレドアへ触れろ。</p>
+            <div class="result-scene" id="resultScene" hidden></div>
+            <div class="screen-actions" id="screenActions">
+              <button class="primary" type="button" data-action="start">START</button>
+            </div>
+          </div>
+        </div>
+
+        <nav class="touch-controls" aria-label="移動操作">
+          <button id="leftButton" type="button" aria-label="左へ旋回" title="左へ旋回">↶</button>
+          <button id="runButton" type="button" aria-label="前進" title="前進">↑</button>
+          <button id="rightButton" type="button" aria-label="右へ旋回" title="右へ旋回">↷</button>
+          <button id="backButton" type="button" aria-label="後退" title="後退">↓</button>
+        </nav>
+      </section>
+
+      <aside class="stage-board" aria-label="ステージ一覧">
+        <div class="board-title">
+          <span>駅構内 5 STAGES</span>
+          <strong id="boardStatus">尊厳防衛中</strong>
+        </div>
+        <ol id="stageList"></ol>
+      </aside>
+    </main>
+  </body>
+</html>
