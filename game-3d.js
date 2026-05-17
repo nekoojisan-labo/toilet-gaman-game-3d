@@ -117,11 +117,18 @@ const STAGES = [
   },
 ].map((s, i) => ({ ...s, ...parseMap(s.map), index: i }));
 
+// ★ 2.5D: キャラはGLBではなくPNGスプライト（参照画像を直接使用）
+const SPRITE_BASE = "./assets/sprites3d";
+const PLAYER_SPRITES = {
+  idle: "player_idle_alt.png",
+  // run cycle 3 frames (chroma抜き、サイズ大、リアル走り)
+  run: ["player_run_1.png", "player_run_2.png", "player_run_3.png"],
+};
 const ENEMY_DEFS = {
-  business: { glb: "enemy-business.glb", radius: 0.27, hitRadius: 0.18, speedMul: 1.18 },
-  ol:       { glb: "enemy-ol.glb",       radius: 0.25, hitRadius: 0.17, speedMul: 1.00 },
-  student:  { glb: "enemy-student.glb",  radius: 0.25, hitRadius: 0.17, speedMul: 0.96 },
-  traveler: { glb: "enemy-traveler.glb", radius: 0.40, hitRadius: 0.25, speedMul: 0.82 },
+  business: { sprite_idle: "player_idle_alt.png", sprite_run: ["player_run_1.png", "player_run_3.png"], radius: 0.27, hitRadius: 0.18, speedMul: 1.18, worldH: 1.40 },
+  ol:       { sprite_idle: "enemy_ol_idle.png",   sprite_run: ["enemy_ol_run.png", "enemy_ol_idle.png"], radius: 0.25, hitRadius: 0.17, speedMul: 1.00, worldH: 1.30 },
+  student:  { sprite_idle: "enemy_student_idle.png", sprite_run: ["enemy_student_run.png", "enemy_student_idle.png"], radius: 0.25, hitRadius: 0.17, speedMul: 0.96, worldH: 1.30 },
+  traveler: { sprite_idle: "enemy_traveler_idle.png", sprite_run: ["enemy_traveler_run.png", "enemy_traveler_idle.png"], radius: 0.40, hitRadius: 0.25, speedMul: 0.82, worldH: 1.32 },
 };
 
 function parseMap(rows) {
@@ -304,11 +311,24 @@ window.addEventListener("resize", resizeRenderer);
 
 // ===== アセット =====
 const loader = new GLTFLoader();
+const texLoader = new THREE.TextureLoader();
 const assets = {
   stages: [null, null, null, null, null],
-  player: null,
-  enemies: {},
+  playerTex: { idle: null, run: [] },
+  enemyTex: {},  // { business: {idle, run:[...]}, ... }
 };
+
+function loadSpriteTexture(filename) {
+  return new Promise((resolve) => {
+    texLoader.load(`${SPRITE_BASE}/${filename}`, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.generateMipmaps = true;
+      resolve(tex);
+    });
+  });
+}
 
 async function loadAllAssets() {
   const tasks = [];
@@ -319,28 +339,79 @@ async function loadAllAssets() {
       }),
     );
   }
+  // プレイヤースプライト (idle + run3枚)
   tasks.push(
-    loader.loadAsync(`${GLB_BASE}/player-businessman.glb`).then((g) => {
-      assets.player = g.scene;
-      assets.playerAnims = g.animations || [];
-    }),
+    loadSpriteTexture(PLAYER_SPRITES.idle).then((t) => { assets.playerTex.idle = t; }),
   );
-  for (const [key, def] of Object.entries(ENEMY_DEFS)) {
+  PLAYER_SPRITES.run.forEach((f, i) => {
     tasks.push(
-      loader.loadAsync(`${GLB_BASE}/${def.glb}`).then((g) => {
-        assets.enemies[key] = g.scene;
-        assets.enemyAnims = assets.enemyAnims || {};
-        assets.enemyAnims[key] = g.animations || [];
-      }),
+      loadSpriteTexture(f).then((t) => { assets.playerTex.run[i] = t; }),
     );
+  });
+  // 敵スプライト
+  for (const [key, def] of Object.entries(ENEMY_DEFS)) {
+    assets.enemyTex[key] = { idle: null, run: [] };
+    tasks.push(
+      loadSpriteTexture(def.sprite_idle).then((t) => { assets.enemyTex[key].idle = t; }),
+    );
+    def.sprite_run.forEach((f, i) => {
+      tasks.push(
+        loadSpriteTexture(f).then((t) => { assets.enemyTex[key].run[i] = t; }),
+      );
+    });
   }
   await Promise.all(tasks);
-  console.log("All GLB assets loaded", {
-    playerAnims: assets.playerAnims.map((a) => a.name),
-    enemyAnims: Object.fromEntries(
-      Object.entries(assets.enemyAnims || {}).map(([k, v]) => [k, v.map((a) => a.name)])
-    ),
+  console.log("Assets loaded (5 stages + 4 chars sprites)");
+}
+
+/** スプライトを作成（カメラ常時正対のbillboard、アスペクト比保持） */
+function createCharacterSprite(idleTex, worldHeight = 1.4) {
+  const mat = new THREE.SpriteMaterial({
+    map: idleTex,
+    transparent: true,
+    alphaTest: 0.1,
+    depthWrite: false,
   });
+  const sprite = new THREE.Sprite(mat);
+  // アスペクト比保持: テクスチャの縦横比から幅算出
+  const aspect = idleTex.image.width / idleTex.image.height;
+  sprite.scale.set(worldHeight * aspect, worldHeight, 1);
+  // 中心を足元基準にするため、位置はY+worldHeight/2に置く前提
+  sprite.center.set(0.5, 0);  // 下中央
+  return sprite;
+}
+
+/** スプライト用「フレーム切替＋向き反転」ヘルパー */
+function spriteController(sprite, frames, options = {}) {
+  // frames: テクスチャ配列（順に切り替え）
+  const fps = options.fps || 6;
+  const facingLeft = options.facingLeft ?? false;
+  return {
+    sprite,
+    frames,
+    idx: 0,
+    timer: 0,
+    facingLeft,
+    update(dt, isMoving, faceLeft) {
+      if (!isMoving) {
+        // idle: 最初のフレームに戻す
+        this.idx = 0;
+        sprite.material.map = frames[0];
+        sprite.material.needsUpdate = true;
+      } else {
+        this.timer += dt;
+        if (this.timer >= 1 / fps) {
+          this.timer = 0;
+          this.idx = (this.idx + 1) % frames.length;
+          sprite.material.map = frames[this.idx];
+          sprite.material.needsUpdate = true;
+        }
+      }
+      // 左右反転: スプライトのscale.x符号で
+      const absX = Math.abs(sprite.scale.x);
+      sprite.scale.x = faceLeft ? -absX : absX;
+    },
+  };
 }
 
 /**
@@ -468,24 +539,17 @@ function startStage(index) {
   });
   scene.add(state.stageObj3D);
 
-  // プレイヤー追加 (SkeletonUtils.clone でアーマチュアごと安全コピー + 原点正規化)
+  // ★ プレイヤーはSprite (参照画像そのまま、カメラ常時正対)
   if (state.playerObj3D) scene.remove(state.playerObj3D);
   state.playerMixer = null;
-  state.playerObj3D = SkeletonUtils.clone(assets.player);
-  const playerRoot = findCharacterRoot(state.playerObj3D, "player");
-  if (playerRoot && playerRoot !== state.playerObj3D) {
-    state.playerObj3D.updateMatrixWorld(true);
-    const rootWorld = new THREE.Vector3();
-    playerRoot.getWorldPosition(rootWorld);
-    state.playerObj3D.children.forEach((c) => c.position.sub(rootWorld));
-    state.playerObj3D.updateMatrixWorld(true);
-  }
-  state.playerObj3D.traverse((obj) => {
-    if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
-  });
-  scene.add(state.playerObj3D);
-  // walk/idle アニメーション接続
-  state.playerMixer = setupCharacterMixer(state.playerObj3D, assets.playerAnims, "idle");
+  const playerSprite = createCharacterSprite(assets.playerTex.idle, 1.50);
+  scene.add(playerSprite);
+  state.playerObj3D = playerSprite;
+  state.playerCtrl = spriteController(
+    playerSprite,
+    [assets.playerTex.idle, ...assets.playerTex.run],  // [idle, run1, run2, run3] の4テクスチャ
+    { fps: 8 },
+  );
 
   // 敵生成
   state.enemyObj3Ds.forEach((e) => scene.remove(e));
@@ -522,30 +586,16 @@ function startStage(index) {
       turnTimer: rand(0.5, 1.5),
     };
     state.enemies.push(enemy);
-    // SkeletonUtils.cloneでアーマチュアもコピー
-    const mesh = SkeletonUtils.clone(assets.enemies[typeKey]);
-    const root = findCharacterRoot(mesh, typeKey);
-    if (root && root !== mesh) {
-      mesh.updateMatrixWorld(true);
-      const rootWorld = new THREE.Vector3();
-      root.getWorldPosition(rootWorld);
-      mesh.children.forEach((c) => c.position.sub(rootWorld));
-      mesh.updateMatrixWorld(true);
-    }
-    mesh.traverse((obj) => {
-      if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
-    });
+    // ★ 敵もSprite
+    const tex = assets.enemyTex[typeKey];
+    const sprite = createCharacterSprite(tex.idle, def.worldH || 1.30);
     const wp = gridToWorld(enemy.x - 0.5, enemy.z - 0.5);
-    mesh.position.copy(wp);
-    mesh.rotation.y = Math.atan2(enemy.dx, enemy.dz);
-    scene.add(mesh);
-    state.enemyObj3Ds.push(mesh);
-    // walk/idle アニメーション接続
-    const anims = (assets.enemyAnims || {})[typeKey];
-    state.enemyMixers.push(setupCharacterMixer(mesh, anims, "walk"));
+    sprite.position.copy(wp);
+    scene.add(sprite);
+    state.enemyObj3Ds.push(sprite);
+    state.enemyMixers.push(spriteController(sprite, [tex.idle, ...tex.run], { fps: 5 }));
   }
-  // enemyMixers配列リセット（forEachの前に）はループ前で行う
-  // (上書きでpushされていくが、最初にenemyObj3Dsクリアと同期する必要あり)
+  // enemyMixersクリアは前ループで実施済
 
   // プレイヤー初期化: 実際に通れる最短経路の初手へ向ける
   const sp = stage.start;
@@ -670,9 +720,7 @@ function tick(now) {
     if (state.hitTimer > 0) state.hitTimer -= dt;
   }
 
-  // アニメーションミキサー更新（pause中も呼ぶ:停止中のidleアニメ継続）
-  if (state.playerMixer) state.playerMixer.mixer.update(dt);
-  state.enemyMixers.forEach((m) => { if (m) m.mixer.update(dt); });
+  // (Spriteベース化のため AnimationMixer は不使用)
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -752,25 +800,25 @@ function updatePlayer(dt) {
       p.moveDuration = 0;
     }
   }
-  // メッシュ反映
+  // ★ Sprite位置更新 + アニメフレーム切替
   if (state.playerObj3D) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
     state.playerObj3D.position.copy(wp);
-    // バックボーンアニメ（mixer）優先、なければプロシージャル歩行
-    if (state.playerMixer) {
-      state.playerObj3D.rotation.y = p.angle;
-      const wantWalk = p.moveDuration > 0;
-      state.playerMixer.play(wantWalk ? "walk" : "idle", 0.18);
-    } else {
-      applyWalkAnimation(state.playerObj3D, p.angle, dt, {
-        isMoving: p.moveDuration > 0,
-        stepHz: 5.0,
-        bobAmp: 0.13,
-        leanRad: 0.16,
-        rollAmp: 0.07,
-        hitTimer: state.hitTimer,
-      });
+    // 走り中は少し上下バウンス
+    if (p.moveDuration > 0) {
+      const t = p.moveTime / p.moveDuration;
+      state.playerObj3D.position.y += Math.abs(Math.sin(t * Math.PI * 2)) * 0.06;
     }
+    // hit中シェイク
+    if (state.hitTimer > 0) {
+      state.playerObj3D.position.x += Math.sin(performance.now() / 25) * 0.05 * state.hitTimer;
+    }
+    // 進行方向で左右反転（カメラから見て、進行方向が-Xなら左向き）
+    // playerは前方を見ているので、p.angle で判定。
+    // angle 0 = +Z, π/2 = +X (右向き), π = -Z, -π/2 = -X (左向き)
+    // sin(angle) > 0 なら +X向き = 右、< 0 なら -X向き = 左
+    const faceLeft = Math.sin(p.angle) < -0.1;
+    state.playerCtrl?.update(dt, p.moveDuration > 0, faceLeft);
   }
 }
 
@@ -829,49 +877,20 @@ function updateEnemies(dt) {
       // 反転
       e.dx = -e.dx; e.dz = -e.dz;
     }
-    // メッシュ反映 + 進行方向回転 + walk/idle切替
-    const mesh = state.enemyObj3Ds[idx];
-    if (mesh) {
+    // ★ Sprite位置更新 + フレーム切替（敵）
+    const sprite = state.enemyObj3Ds[idx];
+    if (sprite) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
-      mesh.position.copy(wp);
-      const targetAngle = Math.atan2(e.dx, e.dz);
-      const curYaw = mesh.userData.yaw ?? mesh.rotation.y;
-      let delta = targetAngle - curYaw;
-      while (delta > Math.PI) delta -= Math.PI * 2;
-      while (delta < -Math.PI) delta += Math.PI * 2;
-      const maxStep = 10 * dt;
-      const newYaw = Math.abs(delta) <= maxStep
-        ? targetAngle
-        : curYaw + Math.sign(delta) * maxStep;
-      mesh.userData.yaw = newYaw;
-      // ボーンアニメ優先、なければプロシージャル
-      const mixer = state.enemyMixers[idx];
-      if (mixer) {
-        mesh.rotation.y = newYaw;
-        const wantWalk = e.behavior !== "blocker";
-        mixer.play(wantWalk ? "walk" : "idle", 0.18);
-        if (mixer.current) {
-          const targetSpeed =
-            e.behavior === "sprinter" ? 1.5 :
-            e.behavior === "zigzag"   ? 1.15 :
-            e.behavior === "blocker"  ? 1.0 :
-            0.95;
-          mixer.current.setEffectiveTimeScale(targetSpeed);
-        }
-      } else {
-        const isMoving = e.behavior !== "blocker";
-        const stepHz =
-          e.behavior === "sprinter" ? 6.5 :
-          e.behavior === "zigzag"   ? 4.8 :
-          4.0;
-        applyWalkAnimation(mesh, newYaw, dt, {
-          isMoving,
-          stepHz,
-          bobAmp: e.behavior === "sprinter" ? 0.15 : 0.10,
-          leanRad: e.behavior === "sprinter" ? 0.19 : 0.09,
-          rollAmp: e.behavior === "zigzag" ? 0.13 : 0.07,
-        });
+      sprite.position.copy(wp);
+      // 軽くバウンス
+      const isMoving = e.behavior !== "blocker";
+      if (isMoving) {
+        sprite.position.y += Math.abs(Math.sin(performance.now() / 200 + idx)) * 0.04;
       }
+      // 進行方向で左右反転
+      const faceLeft = e.dx < -0.1;
+      const ctrl = state.enemyMixers[idx];
+      if (ctrl) ctrl.update(dt, isMoving, faceLeft);
     }
   });
 }
