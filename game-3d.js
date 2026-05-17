@@ -756,15 +756,20 @@ function updatePlayer(dt) {
   if (state.playerObj3D) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
     state.playerObj3D.position.copy(wp);
-    state.playerObj3D.rotation.y = p.angle;
-    // hit中だけ微シェイク
-    if (state.hitTimer > 0) {
-      state.playerObj3D.position.x += Math.sin(performance.now() / 25) * 0.06 * state.hitTimer;
-    }
-    // walk/idle切替
+    // バックボーンアニメ（mixer）優先、なければプロシージャル歩行
     if (state.playerMixer) {
+      state.playerObj3D.rotation.y = p.angle;
       const wantWalk = p.moveDuration > 0;
       state.playerMixer.play(wantWalk ? "walk" : "idle", 0.18);
+    } else {
+      applyWalkAnimation(state.playerObj3D, p.angle, dt, {
+        isMoving: p.moveDuration > 0,
+        stepHz: 5.0,
+        bobAmp: 0.13,
+        leanRad: 0.16,
+        rollAmp: 0.07,
+        hitTimer: state.hitTimer,
+      });
     }
   }
 }
@@ -829,7 +834,6 @@ function updateEnemies(dt) {
     if (mesh) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
       mesh.position.copy(wp);
-      // 進行方向に滑らかに旋回（+Z正面想定）
       const targetAngle = Math.atan2(e.dx, e.dz);
       const curYaw = mesh.userData.yaw ?? mesh.rotation.y;
       let delta = targetAngle - curYaw;
@@ -840,10 +844,10 @@ function updateEnemies(dt) {
         ? targetAngle
         : curYaw + Math.sign(delta) * maxStep;
       mesh.userData.yaw = newYaw;
-      mesh.rotation.y = newYaw;
-      // ボーンアニメ切替: blockerはidle、それ以外はwalk（振る舞い別の再生速度）
+      // ボーンアニメ優先、なければプロシージャル
       const mixer = state.enemyMixers[idx];
       if (mixer) {
+        mesh.rotation.y = newYaw;
         const wantWalk = e.behavior !== "blocker";
         mixer.play(wantWalk ? "walk" : "idle", 0.18);
         if (mixer.current) {
@@ -854,6 +858,19 @@ function updateEnemies(dt) {
             0.95;
           mixer.current.setEffectiveTimeScale(targetSpeed);
         }
+      } else {
+        const isMoving = e.behavior !== "blocker";
+        const stepHz =
+          e.behavior === "sprinter" ? 6.5 :
+          e.behavior === "zigzag"   ? 4.8 :
+          4.0;
+        applyWalkAnimation(mesh, newYaw, dt, {
+          isMoving,
+          stepHz,
+          bobAmp: e.behavior === "sprinter" ? 0.15 : 0.10,
+          leanRad: e.behavior === "sprinter" ? 0.19 : 0.09,
+          rollAmp: e.behavior === "zigzag" ? 0.13 : 0.07,
+        });
       }
     }
   });
