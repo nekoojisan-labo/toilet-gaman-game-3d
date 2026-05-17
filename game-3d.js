@@ -149,6 +149,66 @@ function isWall(stage, x, z) {
   return stage.map[z][x] === "#";
 }
 
+function cellKey(x, z) {
+  return `${x},${z}`;
+}
+
+function cellDistance(stage, from, to) {
+  if (isWall(stage, from.x, from.z) || isWall(stage, to.x, to.z)) return Infinity;
+
+  const queue = [{ x: from.x, z: from.z, d: 0 }];
+  const seen = new Set([cellKey(from.x, from.z)]);
+  for (let i = 0; i < queue.length; i += 1) {
+    const cur = queue[i];
+    if (cur.x === to.x && cur.z === to.z) return cur.d;
+    for (const dir of DIRS) {
+      const nx = cur.x + dir.dx;
+      const nz = cur.z + dir.dz;
+      const key = cellKey(nx, nz);
+      if (seen.has(key) || isWall(stage, nx, nz)) continue;
+      seen.add(key);
+      queue.push({ x: nx, z: nz, d: cur.d + 1 });
+    }
+  }
+  return Infinity;
+}
+
+function startDirFor(stage) {
+  let best = null;
+  DIRS.forEach((dir, index) => {
+    const nx = stage.start.x + dir.dx;
+    const nz = stage.start.z + dir.dz;
+    if (isWall(stage, nx, nz)) return;
+    const score = cellDistance(stage, { x: nx, z: nz }, stage.goal);
+    if (!best || score < best.score) best = { index, score };
+  });
+  return best ? best.index : 1;
+}
+
+function characterRootName(typeKey) {
+  return {
+    player: "ChibiPlayer_Root",
+    business: "ChibiBusiness_Root",
+    ol: "ChibiOL_Root",
+    student: "ChibiStudent_Root",
+    traveler: "ChibiTraveler_Root",
+  }[typeKey] || null;
+}
+
+function findCharacterRoot(instance, typeKey) {
+  const expectedName = characterRootName(typeKey);
+  if (expectedName) {
+    const expected = instance.getObjectByName(expectedName);
+    if (expected) return expected;
+  }
+
+  let root = null;
+  instance.traverse((obj) => {
+    if (!root && obj.name.endsWith("_Root")) root = obj;
+  });
+  return root || instance;
+}
+
 // ===== DOM =====
 const canvas = document.getElementById("gameCanvas");
 const screenLayer = document.getElementById("screenLayer");
@@ -172,18 +232,41 @@ const backBtn = document.getElementById("backButton");
 
 // ===== Three.js セットアップ =====
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1f26);
-scene.fog = new THREE.Fog(0x1a1f26, 12, 28);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const camera = new THREE.PerspectiveCamera(62, canvas.width / canvas.height, 0.1, 80);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12161c);
+scene.fog = new THREE.Fog(0x12161c, 14, 34);
+
+const camera = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 80);
 camera.position.set(0, 2, 0);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.55);
-scene.add(ambient);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-dirLight.position.set(5, 10, 5);
+// 半球光（自然な上下グラデーション）
+const hemi = new THREE.HemisphereLight(0xffffff, 0x3a3a4a, 0.85);
+scene.add(hemi);
+
+// メイン照明（影付き）
+const dirLight = new THREE.DirectionalLight(0xfff4e0, 1.4);
+dirLight.position.set(8, 14, 6);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = -20;
+dirLight.shadow.camera.right = 20;
+dirLight.shadow.camera.top = 20;
+dirLight.shadow.camera.bottom = -20;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 40;
+dirLight.shadow.bias = -0.0008;
 scene.add(dirLight);
+
+// フィルライト（影を柔らかく）
+const fillLight = new THREE.DirectionalLight(0xb8d4ff, 0.4);
+fillLight.position.set(-6, 8, -4);
+scene.add(fillLight);
 
 function resizeRenderer() {
   const w = canvas.clientWidth || 760;
@@ -246,7 +329,9 @@ const state = {
   enemies: [],
   stageObj3D: null,
   playerObj3D: null,
+  playerRoot3D: null,
   enemyObj3Ds: [],
+  enemyRoot3Ds: [],
   keys: { left: false, right: false, forward: false, back: false },
   inputCooldown: 0,
   queuedAction: null,
@@ -287,16 +372,41 @@ function startStage(index) {
   // 既存ステージ削除
   if (state.stageObj3D) scene.remove(state.stageObj3D);
   state.stageObj3D = assets.stages[index].clone(true);
+  // 床/壁は影を受ける、emission以外は影も落とす
+  state.stageObj3D.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.receiveShadow = true;
+      // エミッション強度がある=自発光オブジェクト(蛍光灯/看板)は影キャストしない
+      const mat = obj.material;
+      const isEmissive = mat && mat.emissiveIntensity > 0.5;
+      obj.castShadow = !isEmissive;
+    }
+  });
   scene.add(state.stageObj3D);
 
-  // プレイヤー追加 (clone)
+  // プレイヤー追加 (clone + 原点正規化)
+  // Blender側で_Rootに-5/-8/...のXオフセットを付けているため、
+  // 「_Root世界座標が(0,0,0)」になるよう全直下の子をシフト。
+  // 以降は state.playerObj3D.position = wp で正しい位置に置ける。
   if (state.playerObj3D) scene.remove(state.playerObj3D);
   state.playerObj3D = assets.player.clone(true);
+  state.playerRoot3D = findCharacterRoot(state.playerObj3D, "player");
+  if (state.playerRoot3D && state.playerRoot3D !== state.playerObj3D) {
+    state.playerObj3D.updateMatrixWorld(true);
+    const rootWorld = new THREE.Vector3();
+    state.playerRoot3D.getWorldPosition(rootWorld);
+    state.playerObj3D.children.forEach((c) => c.position.sub(rootWorld));
+    state.playerObj3D.updateMatrixWorld(true);
+  }
+  state.playerObj3D.traverse((obj) => {
+    if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+  });
   scene.add(state.playerObj3D);
 
   // 敵生成
   state.enemyObj3Ds.forEach((e) => scene.remove(e));
   state.enemyObj3Ds = [];
+  state.enemyRoot3Ds = [];
   state.enemies = [];
 
   const stageOpen = stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
@@ -322,23 +432,30 @@ function startStage(index) {
     };
     state.enemies.push(enemy);
     const mesh = assets.enemies[typeKey].clone(true);
-    mesh.position.copy(gridToWorld(enemy.x - 0.5, enemy.z - 0.5));
-    // 初期向きを進行方向に合わせる
+    const root = findCharacterRoot(mesh, typeKey);
+    // 原点正規化: _Root世界座標が(0,0,0)になるよう全直下の子をシフト
+    if (root && root !== mesh) {
+      mesh.updateMatrixWorld(true);
+      const rootWorld = new THREE.Vector3();
+      root.getWorldPosition(rootWorld);
+      mesh.children.forEach((c) => c.position.sub(rootWorld));
+      mesh.updateMatrixWorld(true);
+    }
+    mesh.traverse((obj) => {
+      if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+    });
+    // 初期位置（正規化済みなので mesh.position 直接でOK）
+    const wp = gridToWorld(enemy.x - 0.5, enemy.z - 0.5);
+    mesh.position.copy(wp);
     mesh.rotation.y = Math.atan2(enemy.dx, enemy.dz);
     scene.add(mesh);
     state.enemyObj3Ds.push(mesh);
+    state.enemyRoot3Ds.push(root);
   }
 
-  // プレイヤー初期化: ゴール方向に向ける
+  // プレイヤー初期化: 実際に通れる最短経路の初手へ向ける
   const sp = stage.start;
-  const goalDx = stage.goal.x - sp.x;
-  const goalDz = stage.goal.z - sp.z;
-  let initDirIdx = 0;
-  if (Math.abs(goalDx) >= Math.abs(goalDz)) {
-    initDirIdx = goalDx >= 0 ? 0 : 2;  // right or left
-  } else {
-    initDirIdx = goalDz >= 0 ? 1 : 3;  // front or back
-  }
+  const initDirIdx = startDirFor(stage);
   const initAngle = DIRS[initDirIdx].angle;
   Object.assign(state.player, {
     x: sp.x + 0.5,
@@ -495,17 +612,17 @@ function updatePlayer(dt) {
     }
   }
   // メッシュ反映
-  if (state.playerObj3D) {
+  if (state.playerRoot3D) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
-    state.playerObj3D.position.copy(wp);
+    state.playerRoot3D.position.copy(wp);
     // 走り中は軽く上下バウンス
     if (p.moveDuration > 0) {
       const bobT = (p.moveTime / p.moveDuration) * Math.PI * 2;
-      state.playerObj3D.position.y = Math.abs(Math.sin(bobT)) * 0.08;
+      state.playerRoot3D.position.y = Math.abs(Math.sin(bobT)) * 0.08;
     } else {
-      state.playerObj3D.position.y = 0;
+      state.playerRoot3D.position.y = 0;
     }
-    state.playerObj3D.rotation.y = p.angle;
+    state.playerRoot3D.rotation.y = p.angle;
   }
 }
 
@@ -565,29 +682,29 @@ function updateEnemies(dt) {
       e.dx = -e.dx; e.dz = -e.dz;
     }
     // メッシュ反映
-    const mesh = state.enemyObj3Ds[idx];
-    if (mesh) {
+    const root = state.enemyRoot3Ds[idx];
+    if (root) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
-      mesh.position.copy(wp);
+      root.position.copy(wp);
       // 進行方向を向く（+Z正面想定）、滑らかに補間
       const targetAngle = Math.atan2(e.dx, e.dz);
-      let cur = mesh.rotation.y;
+      let cur = root.rotation.y;
       let delta = targetAngle - cur;
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
       // 1フレームあたり最大10ラジアン/秒で旋回
       const maxStep = 10 * dt;
       if (Math.abs(delta) <= maxStep) {
-        mesh.rotation.y = targetAngle;
+        root.rotation.y = targetAngle;
       } else {
-        mesh.rotation.y = cur + Math.sign(delta) * maxStep;
+        root.rotation.y = cur + Math.sign(delta) * maxStep;
       }
     }
   });
 }
 
 function updateCamera() {
-  if (!state.playerObj3D) return;
+  if (!state.playerRoot3D) return;
   const p = state.player;
   const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
   // 後方TPS: angle方向の逆 + 上
