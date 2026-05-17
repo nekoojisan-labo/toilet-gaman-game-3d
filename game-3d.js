@@ -329,9 +329,7 @@ const state = {
   enemies: [],
   stageObj3D: null,
   playerObj3D: null,
-  playerRoot3D: null,
   enemyObj3Ds: [],
-  enemyRoot3Ds: [],
   keys: { left: false, right: false, forward: false, back: false },
   inputCooldown: 0,
   queuedAction: null,
@@ -390,11 +388,11 @@ function startStage(index) {
   // 以降は state.playerObj3D.position = wp で正しい位置に置ける。
   if (state.playerObj3D) scene.remove(state.playerObj3D);
   state.playerObj3D = assets.player.clone(true);
-  state.playerRoot3D = findCharacterRoot(state.playerObj3D, "player");
-  if (state.playerRoot3D && state.playerRoot3D !== state.playerObj3D) {
+  const playerRoot = findCharacterRoot(state.playerObj3D, "player");
+  if (playerRoot && playerRoot !== state.playerObj3D) {
     state.playerObj3D.updateMatrixWorld(true);
     const rootWorld = new THREE.Vector3();
-    state.playerRoot3D.getWorldPosition(rootWorld);
+    playerRoot.getWorldPosition(rootWorld);
     state.playerObj3D.children.forEach((c) => c.position.sub(rootWorld));
     state.playerObj3D.updateMatrixWorld(true);
   }
@@ -406,7 +404,6 @@ function startStage(index) {
   // 敵生成
   state.enemyObj3Ds.forEach((e) => scene.remove(e));
   state.enemyObj3Ds = [];
-  state.enemyRoot3Ds = [];
   state.enemies = [];
 
   const stageOpen = stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
@@ -450,7 +447,6 @@ function startStage(index) {
     mesh.rotation.y = Math.atan2(enemy.dx, enemy.dz);
     scene.add(mesh);
     state.enemyObj3Ds.push(mesh);
-    state.enemyRoot3Ds.push(root);
   }
 
   // プレイヤー初期化: 実際に通れる最短経路の初手へ向ける
@@ -583,6 +579,52 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
+/**
+ * 手続き型ウォークアニメーション
+ * - 移動中: 上下バウンス + 前傾 + 左右ロック揺れ
+ * - 停止中: 微小ブレス（idle bobbing）
+ * - hit中:  左右シェイク
+ * obj はGLB scene root（_Root正規化済み前提）
+ */
+function applyWalkAnimation(obj, baseAngle, dt, opts) {
+  const isMoving = !!opts.isMoving;
+  const stepHz = opts.stepHz || 4.6; // 1秒あたり脚切替回数（≒歩行ピッチ）
+  const bobAmp = opts.bobAmp ?? 0.13;
+  const leanRad = opts.leanRad ?? 0.13; // 前傾角(7.5°)
+  const rollAmp = opts.rollAmp ?? 0.10; // 左右揺れ(5.7°)
+  const hitTimer = opts.hitTimer || 0;
+
+  if (typeof obj.userData.walkPhase !== "number") obj.userData.walkPhase = 0;
+  if (typeof obj.userData.idlePhase !== "number") obj.userData.idlePhase = Math.random() * Math.PI * 2;
+
+  obj.userData.idlePhase += dt;
+  if (isMoving) {
+    obj.userData.walkPhase += dt * stepHz * Math.PI * 2;
+  }
+
+  const walk = obj.userData.walkPhase;
+  const idle = obj.userData.idlePhase;
+
+  let bobY = 0, pitch = 0, roll = 0, shakeX = 0;
+
+  if (isMoving) {
+    bobY = Math.abs(Math.sin(walk * 0.5)) * bobAmp;
+    pitch = -leanRad; // 前傾
+    roll = Math.sin(walk * 0.5) * rollAmp;
+  } else {
+    bobY = (Math.sin(idle * 2.0) + 1) * 0.012; // ごく薄い呼吸
+    pitch = 0;
+    roll = 0;
+  }
+  if (hitTimer > 0) {
+    shakeX = Math.sin(performance.now() / 25) * 0.06 * hitTimer;
+  }
+
+  obj.position.y = bobY;
+  obj.position.x += shakeX;
+  obj.rotation.set(pitch, baseAngle, roll, "YXZ");
+}
+
 function updatePlayer(dt) {
   const p = state.player;
   // 回転
@@ -611,18 +653,18 @@ function updatePlayer(dt) {
       p.moveDuration = 0;
     }
   }
-  // メッシュ反映
-  if (state.playerRoot3D) {
+  // メッシュ反映。startStageで_Root原点を正規化済みなのでGLB scene全体を動かす。
+  if (state.playerObj3D) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
-    state.playerRoot3D.position.copy(wp);
-    // 走り中は軽く上下バウンス
-    if (p.moveDuration > 0) {
-      const bobT = (p.moveTime / p.moveDuration) * Math.PI * 2;
-      state.playerRoot3D.position.y = Math.abs(Math.sin(bobT)) * 0.08;
-    } else {
-      state.playerRoot3D.position.y = 0;
-    }
-    state.playerRoot3D.rotation.y = p.angle;
+    state.playerObj3D.position.copy(wp);
+    applyWalkAnimation(state.playerObj3D, p.angle, dt, {
+      isMoving: p.moveDuration > 0,
+      stepHz: 5.4, // 主人公は急いでる
+      bobAmp: 0.14,
+      leanRad: 0.18,
+      rollAmp: 0.08,
+      hitTimer: state.hitTimer,
+    });
   }
 }
 
@@ -681,30 +723,42 @@ function updateEnemies(dt) {
       // 反転
       e.dx = -e.dx; e.dz = -e.dz;
     }
-    // メッシュ反映
-    const root = state.enemyRoot3Ds[idx];
-    if (root) {
+    // メッシュ反映 + ウォークアニメ
+    const mesh = state.enemyObj3Ds[idx];
+    if (mesh) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
-      root.position.copy(wp);
+      mesh.position.copy(wp);
       // 進行方向を向く（+Z正面想定）、滑らかに補間
       const targetAngle = Math.atan2(e.dx, e.dz);
-      let cur = root.rotation.y;
-      let delta = targetAngle - cur;
+      const curYaw = mesh.userData.yaw ?? mesh.rotation.y;
+      let delta = targetAngle - curYaw;
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
-      // 1フレームあたり最大10ラジアン/秒で旋回
       const maxStep = 10 * dt;
-      if (Math.abs(delta) <= maxStep) {
-        root.rotation.y = targetAngle;
-      } else {
-        root.rotation.y = cur + Math.sign(delta) * maxStep;
-      }
+      const newYaw = Math.abs(delta) <= maxStep
+        ? targetAngle
+        : curYaw + Math.sign(delta) * maxStep;
+      mesh.userData.yaw = newYaw;
+      // 振る舞い別ピッチ
+      const stepHz =
+        e.behavior === "blocker"  ? 0.0 :  // 静止: アニメ無し
+        e.behavior === "sprinter" ? 6.6 :
+        e.behavior === "zigzag"   ? 4.8 :
+        4.2;
+      const isMoving = e.behavior !== "blocker";
+      applyWalkAnimation(mesh, newYaw, dt, {
+        isMoving,
+        stepHz,
+        bobAmp: e.behavior === "sprinter" ? 0.16 : 0.11,
+        leanRad: e.behavior === "sprinter" ? 0.20 : 0.10,
+        rollAmp: e.behavior === "zigzag" ? 0.14 : 0.08,
+      });
     }
   });
 }
 
 function updateCamera() {
-  if (!state.playerRoot3D) return;
+  if (!state.playerObj3D) return;
   const p = state.player;
   const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
   // 後方TPS: angle方向の逆 + 上
