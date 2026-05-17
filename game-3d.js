@@ -18,6 +18,11 @@ const PLAYER_TURN_DURATION = 0.18;
 const INPUT_REPEAT_DELAY = 0.1;
 const INPUT_BLOCK_DELAY = 0.24;
 const GLB_BASE = "./assets-3d/glb";
+const CAMERA_BACK = 3.8;
+const CAMERA_MIN_BACK = 1.7;
+const CAMERA_HEIGHT = 2.65;
+const CAMERA_LOOK_HEIGHT = 1.18;
+const CAMERA_LOOK_AHEAD = 3.2;
 
 // 4方向: gridDX, gridDZ, angle(Three.js Y軸まわり)
 // Hyper3D生成キャラは+Z方向を正面として出力されるため、angle = atan2(dx, dz)
@@ -150,6 +155,10 @@ function isWall(stage, x, z) {
   return stage.map[z][x] === "#";
 }
 
+function worldToCellCoord(value) {
+  return Math.floor(value / CELL_SIZE);
+}
+
 function cellKey(x, z) {
   return `${x},${z}`;
 }
@@ -210,6 +219,16 @@ function findCharacterRoot(instance, typeKey) {
   return root || instance;
 }
 
+function softenCameraBlockerMaterial(material, opacity = 0.18) {
+  if (!material) return material;
+  if (Array.isArray(material)) return material.map((m) => softenCameraBlockerMaterial(m, opacity));
+  const cloned = material.clone();
+  cloned.transparent = true;
+  cloned.opacity = opacity;
+  cloned.depthWrite = false;
+  return cloned;
+}
+
 // ===== DOM =====
 const canvas = document.getElementById("gameCanvas");
 const screenLayer = document.getElementById("screenLayer");
@@ -235,7 +254,7 @@ const backBtn = document.getElementById("backButton");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 0.78;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -247,37 +266,30 @@ scene.fog = new THREE.Fog(0x1b2330, 20, 55);
 const camera = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 80);
 camera.position.set(0, 2, 0);
 
-// 環境光（全方位の最低照度を底上げ・暗い面を作らない）
-const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+// シンプル2灯+α構成（白飛び防止のため控えめに）
+const ambient = new THREE.AmbientLight(0xffffff, 0.28);
 scene.add(ambient);
 
-// 半球光（天井=白、床=暗い反射）
-const hemi = new THREE.HemisphereLight(0xfff5e0, 0x404050, 1.05);
+const hemi = new THREE.HemisphereLight(0xfff2da, 0x252a36, 0.48);
 scene.add(hemi);
 
-// メイン照明（暖色、影付き、角度ゆるめ）
-const dirLight = new THREE.DirectionalLight(0xfff0d8, 1.6);
+const dirLight = new THREE.DirectionalLight(0xfff2d8, 0.85);
 dirLight.position.set(5, 16, 8);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.mapSize.set(1536, 1536);
 dirLight.shadow.camera.left = -22;
 dirLight.shadow.camera.right = 22;
 dirLight.shadow.camera.top = 22;
 dirLight.shadow.camera.bottom = -22;
 dirLight.shadow.camera.near = 0.5;
 dirLight.shadow.camera.far = 50;
-dirLight.shadow.bias = -0.0005;
+dirLight.shadow.bias = -0.0006;
 scene.add(dirLight);
 
-// フィルライト（寒色、反対側から）
-const fillLight = new THREE.DirectionalLight(0xc8dcff, 0.6);
+// 軽めフィル（影側の最低限）
+const fillLight = new THREE.DirectionalLight(0xc8dcff, 0.22);
 fillLight.position.set(-8, 10, -6);
 scene.add(fillLight);
-
-// 補助ライト（カメラ周辺、ローカル明るさ確保）
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.35);
-rimLight.position.set(0, 3, -10);
-scene.add(rimLight);
 
 function resizeRenderer() {
   const w = canvas.clientWidth || 760;
@@ -422,6 +434,15 @@ function updateStageList() {
   });
 }
 
+function resetInputState() {
+  state.keys.left = false;
+  state.keys.right = false;
+  state.keys.forward = false;
+  state.keys.back = false;
+  state.inputCooldown = 0;
+  state.queuedAction = null;
+}
+
 // ===== ステージ開始 =====
 function startStage(index) {
   const stage = STAGES[index];
@@ -438,6 +459,11 @@ function startStage(index) {
       const mat = obj.material;
       const isEmissive = mat && mat.emissiveIntensity > 0.5;
       obj.castShadow = !isEmissive;
+      if (/overhead_sign|next_train_panel|station_map_panel/i.test(obj.name || "")) {
+        const opacity = /next_train_panel/i.test(obj.name || "") ? 0.12 : 0.22;
+        obj.material = softenCameraBlockerMaterial(obj.material, opacity);
+        obj.renderOrder = 2;
+      }
     }
   });
   scene.add(state.stageObj3D);
@@ -467,7 +493,14 @@ function startStage(index) {
   state.enemyMixers = [];
   state.enemies = [];
 
-  const stageOpen = stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
+  const spawnOpen = stage.open.filter((c) => {
+    if (c.x === stage.start.x && c.z === stage.start.z) return false;
+    const startDist = Math.abs(c.x - stage.start.x) + Math.abs(c.z - stage.start.z);
+    return startDist >= 5;
+  });
+  const stageOpen = spawnOpen.length >= stage.enemyCount
+    ? spawnOpen
+    : stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
   for (let i = 0; i < stage.enemyCount; i++) {
     const typeKey = stage.pool[i % stage.pool.length];
     const def = ENEMY_DEFS[typeKey];
@@ -538,9 +571,8 @@ function startStage(index) {
   state.timeLeft = stage.time;
   state.dignity = 100;
   state.hitTimer = 0;
-  state.inputCooldown = 0;
-  state.queuedAction = null;
   state.paused = false;
+  resetInputState();
 
   hideOverlay();
   if (stageNo) stageNo.textContent = `STAGE ${index + 1}`;
@@ -834,23 +866,23 @@ function updateCamera() {
   const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
   const ax = Math.sin(p.angle);
   const az = Math.cos(p.angle);
-  // 通路幅2mに収まるよう、最大2.3m後方→壁にぶつかったら詰める
-  const MAX_BACK = 2.3;
-  const MIN_BACK = 0.8;
-  let back = MAX_BACK;
-  // 1段ずつ縮めて壁衝突回避
-  for (let step = 0; step < 8; step++) {
-    const cx = pWorld.x - ax * back;
-    const cz = pWorld.z - az * back;
-    // グリッドセル判定（壁なら次のステップで距離を縮める）
-    const gx = Math.floor(cx / CELL_SIZE);
-    const gz = Math.floor(cz / CELL_SIZE);
+  let back = CAMERA_BACK;
+  while (back > CAMERA_MIN_BACK) {
+    const gx = worldToCellCoord(pWorld.x - ax * back);
+    const gz = worldToCellCoord(pWorld.z - az * back);
     if (!isWall(stage, gx, gz)) break;
-    back = Math.max(MIN_BACK, back - 0.25);
+    back -= 0.25;
   }
-  // カメラ高さ少し上げて、見下ろし気味に
-  camera.position.set(pWorld.x - ax * back, 2.05, pWorld.z - az * back);
-  camera.lookAt(pWorld.x + ax * 1.6, 0.85, pWorld.z + az * 1.6);
+  camera.position.set(
+    pWorld.x - ax * back,
+    CAMERA_HEIGHT,
+    pWorld.z - az * back,
+  );
+  camera.lookAt(
+    pWorld.x + ax * CAMERA_LOOK_AHEAD,
+    CAMERA_LOOK_HEIGHT,
+    pWorld.z + az * CAMERA_LOOK_AHEAD,
+  );
 }
 
 function updateTimerAndDignity(dt) {
@@ -913,6 +945,7 @@ function checkGoal() {
 
 function clearStage() {
   state.mode = "clear";
+  resetInputState();
   state.cleared[state.stageIndex] = true;
   if (boardStatus) boardStatus.textContent = "クリア！";
   updateStageList();
@@ -922,6 +955,7 @@ function clearStage() {
 
 function gameOver() {
   state.mode = "gameover";
+  resetInputState();
   if (boardStatus) boardStatus.textContent = "失敗…";
   showOverlay("gameover");
 }
@@ -1001,6 +1035,7 @@ window.addEventListener("keyup", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) setHeld(k, false);
 });
+window.addEventListener("blur", resetInputState);
 
 // タッチ/ボタン
 function bindButton(btn, action) {
