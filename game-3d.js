@@ -1,46 +1,45 @@
 /**
- * トイレ我慢ゲーム - Three.js 3D版
- * Blender生成GLBアセットを使用したフルポリゴン版
+ * トイレ我慢ゲーム 3D - 固定斜め俯瞰版
  *
- * 既存 game.js を置き換える形で動作。HUDのDOM要素は共通。
- * 当たり判定はグリッドJSON、見た目はGLB。
+ * 設計方針:
+ * - OrthographicCamera 斜め俯瞰固定
+ * - ステージは Three.js Box/Plane で procedural 構築（GLB stage は不使用）
+ * - 壁は低め(0.7m)で視認性確保
+ * - 黄色点字ブロック・青いトイレドア・案内サインで「駅」を記号化
+ * - キャラのみ Hyper3D 生成 GLB を流用
+ * - キャラに進行方向回転＋上下バウンス＋丸影で接地感を出す
  */
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
-import * as SkeletonUtils from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/SkeletonUtils.js";
 
 // ===== 定数 =====
-const CELL_SIZE = 2.0;
-const WALL_HEIGHT = 2.4;
-const PLAYER_MOVE_DURATION = 0.34;
-const PLAYER_BACK_DURATION = 0.44;
-const PLAYER_TURN_DURATION = 0.18;
-const INPUT_REPEAT_DELAY = 0.1;
-const INPUT_BLOCK_DELAY = 0.24;
+const CELL = 2.0;
+const WALL_H = 0.85;
+const PLAYER_H = 1.30;
+const MOVE_DURATION = 0.22;
+const BACK_DURATION = 0.30;
+const TURN_DURATION = 0.16;
+const INPUT_REPEAT_DELAY = 0.08;
+const INPUT_BLOCK_DELAY = 0.18;
 const GLB_BASE = "./assets-3d/glb";
-const CAMERA_BACK = 3.8;
-const CAMERA_MIN_BACK = 1.7;
-const CAMERA_HEIGHT = 2.65;
-const CAMERA_LOOK_HEIGHT = 1.18;
-const CAMERA_LOOK_AHEAD = 3.2;
+const TEX_BASE = "./assets-3d/textures";
 
-// 4方向: gridDX, gridDZ, angle(Three.js Y軸まわり)
-// Hyper3D生成キャラは+Z方向を正面として出力されるため、angle = atan2(dx, dz)
+// 4方向: dx, dz が +Z正面前提
 const DIRS = [
-  { dx: 1, dz: 0, angle: Math.PI / 2 },     // right (+X)
-  { dx: 0, dz: 1, angle: 0 },               // front (+Z)
-  { dx: -1, dz: 0, angle: -Math.PI / 2 },   // left (-X)
-  { dx: 0, dz: -1, angle: Math.PI },        // back (-Z)
+  { dx: 1, dz: 0, angle: Math.PI / 2 },
+  { dx: 0, dz: 1, angle: 0 },
+  { dx: -1, dz: 0, angle: -Math.PI / 2 },
+  { dx: 0, dz: -1, angle: Math.PI },
 ];
 
-// ===== ステージデータ (game.jsと完全同期) =====
+// ===== ステージデータ =====
 const STAGES = [
   {
-    name: "ホーム迷宮", note: "降車直後。正面から来る客はまだ素直",
-    time: 22, drain: 0.55, hitPenalty: 13,
-    enemyCount: 6, enemySpeed: 0.92,
+    name: "ホーム迷宮", note: "降車直後", time: 22, drain: 0.55, hitPenalty: 13,
+    enemyCount: 5, enemySpeed: 0.95,
     behaviors: ["patrol", "patrol", "patrol"],
     pool: ["student", "ol", "business"],
+    accent: 0xf4c430, wallColor: 0x3a5570,
     map: [
       "###############",
       "#............G#",
@@ -52,11 +51,11 @@ const STAGES = [
     ],
   },
   {
-    name: "改札前ジグザグ", note: "スマホ歩きが左右へ読みにくく流れる",
-    time: 23, drain: 0.62, hitPenalty: 14,
-    enemyCount: 8, enemySpeed: 0.98,
+    name: "改札前ジグザグ", note: "スマホ歩き", time: 23, drain: 0.62, hitPenalty: 14,
+    enemyCount: 7, enemySpeed: 1.0,
     behaviors: ["zigzag", "patrol", "zigzag"],
     pool: ["ol", "student", "traveler"],
+    accent: 0x52b476, wallColor: 0x3e5a48,
     map: [
       "###############",
       "#.....#......G#",
@@ -68,11 +67,11 @@ const STAGES = [
     ],
   },
   {
-    name: "階段横の狭路", note: "キャリーケースが幅を取り、曲がり角を塞ぐ",
-    time: 24, drain: 0.72, hitPenalty: 15,
-    enemyCount: 9, enemySpeed: 0.94,
-    behaviors: ["blocker", "patrol", "zigzag", "blocker"],
+    name: "階段横の狭路", note: "キャリーケース", time: 24, drain: 0.72, hitPenalty: 15,
+    enemyCount: 8, enemySpeed: 0.96,
+    behaviors: ["blocker", "patrol", "zigzag"],
     pool: ["traveler", "traveler", "student", "business"],
+    accent: 0xd89535, wallColor: 0x6a503a,
     map: [
       "###############",
       "#..#.........G#",
@@ -84,11 +83,11 @@ const STAGES = [
     ],
   },
   {
-    name: "巨大ターミナル", note: "急ぐビジネスマンが見つけると一直線に突っ込む",
-    time: 23, drain: 0.82, hitPenalty: 16,
-    enemyCount: 11, enemySpeed: 1.06,
-    behaviors: ["sprinter", "patrol", "zigzag", "sprinter"],
+    name: "巨大ターミナル", note: "急ぐビジネスマン", time: 23, drain: 0.82, hitPenalty: 16,
+    enemyCount: 10, enemySpeed: 1.08,
+    behaviors: ["sprinter", "patrol", "zigzag"],
     pool: ["business", "business", "ol", "traveler"],
+    accent: 0xd45c8b, wallColor: 0x584360,
     map: [
       "###############",
       "#....#.......G#",
@@ -100,11 +99,11 @@ const STAGES = [
     ],
   },
   {
-    name: "トイレ前最終防衛線", note: "目前でフェイントと追跡が重なる",
-    time: 25, drain: 0.95, hitPenalty: 18,
-    enemyCount: 13, enemySpeed: 1.12,
-    behaviors: ["ambush", "sprinter", "zigzag", "blocker", "ambush"],
-    pool: ["business", "ol", "student", "traveler", "traveler"],
+    name: "トイレ前最終防衛線", note: "目前で追跡", time: 25, drain: 0.95, hitPenalty: 18,
+    enemyCount: 12, enemySpeed: 1.15,
+    behaviors: ["ambush", "sprinter", "zigzag", "blocker"],
+    pool: ["business", "ol", "student", "traveler"],
+    accent: 0xe1463f, wallColor: 0x603a3a,
     map: [
       "###############",
       "#...#........G#",
@@ -117,18 +116,11 @@ const STAGES = [
   },
 ].map((s, i) => ({ ...s, ...parseMap(s.map), index: i }));
 
-// ★ 2.5D: キャラはGLBではなくPNGスプライト（参照画像を直接使用）
-const SPRITE_BASE = "./assets/sprites3d";
-const PLAYER_SPRITES = {
-  idle: "player_idle_alt.png",
-  // run cycle 3 frames (chroma抜き、サイズ大、リアル走り)
-  run: ["player_run_1.png", "player_run_2.png", "player_run_3.png"],
-};
 const ENEMY_DEFS = {
-  business: { sprite_idle: "player_idle_alt.png", sprite_run: ["player_run_1.png", "player_run_3.png"], radius: 0.27, hitRadius: 0.18, speedMul: 1.18, worldH: 1.40 },
-  ol:       { sprite_idle: "enemy_ol_idle.png",   sprite_run: ["enemy_ol_run.png", "enemy_ol_idle.png"], radius: 0.25, hitRadius: 0.17, speedMul: 1.00, worldH: 1.30 },
-  student:  { sprite_idle: "enemy_student_idle.png", sprite_run: ["enemy_student_run.png", "enemy_student_idle.png"], radius: 0.25, hitRadius: 0.17, speedMul: 0.96, worldH: 1.30 },
-  traveler: { sprite_idle: "enemy_traveler_idle.png", sprite_run: ["enemy_traveler_run.png", "enemy_traveler_idle.png"], radius: 0.40, hitRadius: 0.25, speedMul: 0.82, worldH: 1.32 },
+  business: { glb: "enemy-business.glb", radius: 0.30, hitRadius: 0.30, speedMul: 1.15 },
+  ol:       { glb: "enemy-ol.glb",       radius: 0.28, hitRadius: 0.28, speedMul: 1.00 },
+  student:  { glb: "enemy-student.glb",  radius: 0.28, hitRadius: 0.28, speedMul: 0.95 },
+  traveler: { glb: "enemy-traveler.glb", radius: 0.40, hitRadius: 0.36, speedMul: 0.85 },
 };
 
 function parseMap(rows) {
@@ -148,42 +140,29 @@ function parseMap(rows) {
   return { width, height, start, goal, open };
 }
 
-// ===== グリッド↔ワールド変換 =====
-function gridToWorld(gx, gz) {
-  return new THREE.Vector3(
-    gx * CELL_SIZE + CELL_SIZE / 2,
-    0,
-    gz * CELL_SIZE + CELL_SIZE / 2,
-  );
-}
-
 function isWall(stage, x, z) {
   if (x < 0 || z < 0 || x >= stage.width || z >= stage.height) return true;
   return stage.map[z][x] === "#";
 }
 
-function worldToCellCoord(value) {
-  return Math.floor(value / CELL_SIZE);
+function gridToWorld(gx, gz) {
+  return new THREE.Vector3(gx * CELL + CELL / 2, 0, gz * CELL + CELL / 2);
 }
 
-function cellKey(x, z) {
-  return `${x},${z}`;
-}
+function cellKey(x, z) { return `${x},${z}`; }
 
 function cellDistance(stage, from, to) {
   if (isWall(stage, from.x, from.z) || isWall(stage, to.x, to.z)) return Infinity;
-
   const queue = [{ x: from.x, z: from.z, d: 0 }];
   const seen = new Set([cellKey(from.x, from.z)]);
-  for (let i = 0; i < queue.length; i += 1) {
+  for (let i = 0; i < queue.length; i++) {
     const cur = queue[i];
     if (cur.x === to.x && cur.z === to.z) return cur.d;
     for (const dir of DIRS) {
-      const nx = cur.x + dir.dx;
-      const nz = cur.z + dir.dz;
-      const key = cellKey(nx, nz);
-      if (seen.has(key) || isWall(stage, nx, nz)) continue;
-      seen.add(key);
+      const nx = cur.x + dir.dx, nz = cur.z + dir.dz;
+      const k = cellKey(nx, nz);
+      if (seen.has(k) || isWall(stage, nx, nz)) continue;
+      seen.add(k);
       queue.push({ x: nx, z: nz, d: cur.d + 1 });
     }
   }
@@ -193,47 +172,12 @@ function cellDistance(stage, from, to) {
 function startDirFor(stage) {
   let best = null;
   DIRS.forEach((dir, index) => {
-    const nx = stage.start.x + dir.dx;
-    const nz = stage.start.z + dir.dz;
+    const nx = stage.start.x + dir.dx, nz = stage.start.z + dir.dz;
     if (isWall(stage, nx, nz)) return;
     const score = cellDistance(stage, { x: nx, z: nz }, stage.goal);
     if (!best || score < best.score) best = { index, score };
   });
   return best ? best.index : 1;
-}
-
-function characterRootName(typeKey) {
-  return {
-    player: "ChibiPlayer_Root",
-    business: "ChibiBusiness_Root",
-    ol: "ChibiOL_Root",
-    student: "ChibiStudent_Root",
-    traveler: "ChibiTraveler_Root",
-  }[typeKey] || null;
-}
-
-function findCharacterRoot(instance, typeKey) {
-  const expectedName = characterRootName(typeKey);
-  if (expectedName) {
-    const expected = instance.getObjectByName(expectedName);
-    if (expected) return expected;
-  }
-
-  let root = null;
-  instance.traverse((obj) => {
-    if (!root && obj.name.endsWith("_Root")) root = obj;
-  });
-  return root || instance;
-}
-
-function softenCameraBlockerMaterial(material, opacity = 0.18) {
-  if (!material) return material;
-  if (Array.isArray(material)) return material.map((m) => softenCameraBlockerMaterial(m, opacity));
-  const cloned = material.clone();
-  cloned.transparent = true;
-  cloned.opacity = opacity;
-  cloned.depthWrite = false;
-  return cloned;
 }
 
 // ===== DOM =====
@@ -258,45 +202,26 @@ const forwardBtn = document.getElementById("runButton");
 const backBtn = document.getElementById("backButton");
 
 // ===== Three.js セットアップ =====
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.78;
+renderer.toneMappingExposure = 0.95;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1b2330);
-// フォグ薄め（駅構内の奥行き感は出しつつ視界確保）
-scene.fog = new THREE.Fog(0x1b2330, 20, 55);
+scene.background = new THREE.Color(0x202632);
+scene.fog = new THREE.Fog(0x202632, 30, 60);
 
-const camera = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 80);
-camera.position.set(0, 2, 0);
-
-// シンプル2灯+α構成（白飛び防止のため控えめに）
-const ambient = new THREE.AmbientLight(0xffffff, 0.28);
-scene.add(ambient);
-
-const hemi = new THREE.HemisphereLight(0xfff2da, 0x252a36, 0.48);
-scene.add(hemi);
-
-const dirLight = new THREE.DirectionalLight(0xfff2d8, 0.85);
-dirLight.position.set(5, 16, 8);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1536, 1536);
-dirLight.shadow.camera.left = -22;
-dirLight.shadow.camera.right = 22;
-dirLight.shadow.camera.top = 22;
-dirLight.shadow.camera.bottom = -22;
-dirLight.shadow.camera.near = 0.5;
-dirLight.shadow.camera.far = 50;
-dirLight.shadow.bias = -0.0006;
-scene.add(dirLight);
-
-// 軽めフィル（影側の最低限）
-const fillLight = new THREE.DirectionalLight(0xc8dcff, 0.22);
-fillLight.position.set(-8, 10, -6);
-scene.add(fillLight);
+// === Orthographic Camera 斜め俯瞰固定 ===
+const ORTHO_FRUSTUM = 9;  // 表示範囲（縦方向のm）
+const aspect = canvas.clientWidth / canvas.clientHeight || (760 / 430);
+const camera = new THREE.OrthographicCamera(
+  -ORTHO_FRUSTUM * aspect, ORTHO_FRUSTUM * aspect,
+  ORTHO_FRUSTUM, -ORTHO_FRUSTUM, 0.1, 80
+);
+camera.position.set(8, 12, 8);
+camera.lookAt(0, 0, 0);
 
 function resizeRenderer() {
   const w = canvas.clientWidth || 760;
@@ -304,158 +229,296 @@ function resizeRenderer() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
-  camera.aspect = w / h;
+  const a = w / h;
+  camera.left = -ORTHO_FRUSTUM * a;
+  camera.right = ORTHO_FRUSTUM * a;
+  camera.top = ORTHO_FRUSTUM;
+  camera.bottom = -ORTHO_FRUSTUM;
   camera.updateProjectionMatrix();
 }
 window.addEventListener("resize", resizeRenderer);
 
-// ===== アセット =====
-const loader = new GLTFLoader();
+// === ライト ===
+const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x404856, 0.6);
+scene.add(hemi);
+const dirLight = new THREE.DirectionalLight(0xfff0d8, 1.1);
+dirLight.position.set(6, 14, 4);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -18;
+dirLight.shadow.camera.right = 18;
+dirLight.shadow.camera.top = 18;
+dirLight.shadow.camera.bottom = -18;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 40;
+dirLight.shadow.bias = -0.0008;
+scene.add(dirLight);
+
+// ===== アセットローダー =====
+const glbLoader = new GLTFLoader();
 const texLoader = new THREE.TextureLoader();
 const assets = {
-  stages: [null, null, null, null, null],
-  playerTex: { idle: null, run: [] },
-  enemyTex: {},  // { business: {idle, run:[...]}, ... }
+  charGLBs: {},  // {player, business, ol, student, traveler}
+  signTex: {},   // {exit, restroom, platform, gaman, wcdoor}
 };
 
-function loadSpriteTexture(filename) {
+function loadTex(file, opts = {}) {
   return new Promise((resolve) => {
-    texLoader.load(`${SPRITE_BASE}/${filename}`, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.magFilter = THREE.LinearFilter;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.generateMipmaps = true;
-      resolve(tex);
+    texLoader.load(`${TEX_BASE}/${file}`, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      if (opts.repeat) {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(opts.repeat, opts.repeat);
+      }
+      resolve(t);
     });
   });
 }
 
 async function loadAllAssets() {
   const tasks = [];
-  for (let i = 1; i <= 5; i++) {
+  // キャラGLB
+  const charFiles = {
+    player: "player-businessman.glb",
+    business: "enemy-business.glb",
+    ol: "enemy-ol.glb",
+    student: "enemy-student.glb",
+    traveler: "enemy-traveler.glb",
+  };
+  for (const [key, file] of Object.entries(charFiles)) {
     tasks.push(
-      loader.loadAsync(`${GLB_BASE}/stage-${String(i).padStart(2, "0")}.glb`).then((g) => {
-        assets.stages[i - 1] = g.scene;
+      glbLoader.loadAsync(`${GLB_BASE}/${file}`).then((g) => {
+        assets.charGLBs[key] = g.scene;
       }),
     );
   }
-  // プレイヤースプライト (idle + run3枚)
-  tasks.push(
-    loadSpriteTexture(PLAYER_SPRITES.idle).then((t) => { assets.playerTex.idle = t; }),
-  );
-  PLAYER_SPRITES.run.forEach((f, i) => {
-    tasks.push(
-      loadSpriteTexture(f).then((t) => { assets.playerTex.run[i] = t; }),
-    );
-  });
-  // 敵スプライト
-  for (const [key, def] of Object.entries(ENEMY_DEFS)) {
-    assets.enemyTex[key] = { idle: null, run: [] };
-    tasks.push(
-      loadSpriteTexture(def.sprite_idle).then((t) => { assets.enemyTex[key].idle = t; }),
-    );
-    def.sprite_run.forEach((f, i) => {
-      tasks.push(
-        loadSpriteTexture(f).then((t) => { assets.enemyTex[key].run[i] = t; }),
-      );
-    });
+  // サインテクスチャ
+  const sigFiles = {
+    exit: "sign-exit.png",
+    restroom: "sign-restroom.png",
+    platform: "sign-platform.png",
+    gaman: "poster-gaman.png",
+    wcdoor: "wc-door.png",
+  };
+  for (const [key, file] of Object.entries(sigFiles)) {
+    tasks.push(loadTex(file).then((t) => { assets.signTex[key] = t; }));
   }
   await Promise.all(tasks);
-  console.log("Assets loaded (5 stages + 4 chars sprites)");
+  console.log("Assets loaded:", Object.keys(assets.charGLBs), Object.keys(assets.signTex));
 }
 
-/** スプライトを作成（カメラ常時正対のbillboard、アスペクト比保持） */
-function createCharacterSprite(idleTex, worldHeight = 1.4) {
-  const mat = new THREE.SpriteMaterial({
-    map: idleTex,
-    transparent: true,
-    alphaTest: 0.1,
-    depthWrite: false,
+// ===== ステージビルダー（Three.jsプリミティブ） =====
+function buildStage(stage) {
+  const group = new THREE.Group();
+  group.name = `Stage_${stage.index}`;
+
+  const accentColor = new THREE.Color(stage.accent);
+  const wallColor = new THREE.Color(stage.wallColor);
+
+  // --- 床（市松タイル） ---
+  // 全体の床: 大きな単一planeで効率化
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0xe8e4d8, roughness: 0.85, metalness: 0.0,
   });
-  const sprite = new THREE.Sprite(mat);
-  // アスペクト比保持: テクスチャの縦横比から幅算出
-  const aspect = idleTex.image.width / idleTex.image.height;
-  sprite.scale.set(worldHeight * aspect, worldHeight, 1);
-  // 中心を足元基準にするため、位置はY+worldHeight/2に置く前提
-  sprite.center.set(0.5, 0);  // 下中央
-  return sprite;
-}
+  const floorW = stage.width * CELL;
+  const floorD = stage.height * CELL;
+  const floorMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(floorW, floorD),
+    floorMat,
+  );
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set(floorW / 2, 0, floorD / 2);
+  floorMesh.receiveShadow = true;
+  group.add(floorMesh);
 
-/** スプライト用「フレーム切替＋向き反転」ヘルパー */
-function spriteController(sprite, frames, options = {}) {
-  // frames: テクスチャ配列（順に切り替え）
-  const fps = options.fps || 6;
-  const facingLeft = options.facingLeft ?? false;
-  return {
-    sprite,
-    frames,
-    idx: 0,
-    timer: 0,
-    facingLeft,
-    update(dt, isMoving, faceLeft) {
-      if (!isMoving) {
-        // idle: 最初のフレームに戻す
-        this.idx = 0;
-        sprite.material.map = frames[0];
-        sprite.material.needsUpdate = true;
-      } else {
-        this.timer += dt;
-        if (this.timer >= 1 / fps) {
-          this.timer = 0;
-          this.idx = (this.idx + 1) % frames.length;
-          sprite.material.map = frames[this.idx];
-          sprite.material.needsUpdate = true;
-        }
-      }
-      // 左右反転: スプライトのscale.x符号で
-      const absX = Math.abs(sprite.scale.x);
-      sprite.scale.x = faceLeft ? -absX : absX;
-    },
-  };
-}
-
-/**
- * GLBに含まれるwalk/idleアニメーションをAnimationMixerにセットアップ。
- * 返り値: { mixer, walkAction, idleAction, current, play(name, fadeDuration) }
- */
-function setupCharacterMixer(rootScene, animations, defaultName = "idle") {
-  if (!animations || animations.length === 0) return null;
-  const mixer = new THREE.AnimationMixer(rootScene);
-  const actions = {};
-  for (const clip of animations) {
-    const a = mixer.clipAction(clip);
-    a.setLoop(THREE.LoopRepeat);
-    a.clampWhenFinished = false;
-    actions[clip.name] = a;
-    // 名前の正規化（"Player_walk" → "walk"等）
-    const short = clip.name.split(/[_:]/).pop().toLowerCase();
-    if (!actions[short]) actions[short] = a;
+  // 市松：通路セルごとに濃淡を分けるためsmallタイル追加
+  const tileMatA = new THREE.MeshStandardMaterial({ color: 0xd4cfbf, roughness: 0.85 });
+  const tileMatB = new THREE.MeshStandardMaterial({ color: 0xc4bfaa, roughness: 0.85 });
+  const tileGeo = new THREE.PlaneGeometry(CELL * 0.96, CELL * 0.96);
+  for (let z = 0; z < stage.height; z++) {
+    for (let x = 0; x < stage.width; x++) {
+      if (stage.map[z][x] === "#") continue;
+      const t = new THREE.Mesh(tileGeo, (x + z) % 2 === 0 ? tileMatA : tileMatB);
+      t.rotation.x = -Math.PI / 2;
+      t.position.set(x * CELL + CELL / 2, 0.005, z * CELL + CELL / 2);
+      t.receiveShadow = true;
+      group.add(t);
+    }
   }
-  // デフォルトを開始
-  let current = actions[defaultName] || actions["idle"] || Object.values(actions)[0];
-  if (current) current.play();
-  return {
-    mixer,
-    actions,
-    current,
-    play(name, fadeDuration = 0.2) {
-      const next = actions[name];
-      if (!next || next === this.current) return;
-      if (this.current) {
-        next.reset();
-        next.play();
-        next.crossFadeFrom(this.current, fadeDuration, false);
-      } else {
-        next.play();
+
+  // --- 黄色点字ブロック ---
+  // 通路の各行で、開始セルからゴール方向に沿った点字ブロックを敷く
+  const tactileMat = new THREE.MeshStandardMaterial({
+    color: 0xf2c61f, roughness: 0.6, emissive: 0xb09010, emissiveIntensity: 0.18,
+  });
+  // 単純：S と G を含む行全体（または接続行）に細長い帯を敷く
+  for (let z = 0; z < stage.height; z++) {
+    // この行で連続する通路を見つけて1本のストリップに
+    let runStart = null;
+    for (let x = 0; x <= stage.width; x++) {
+      const walkable = x < stage.width && stage.map[z][x] !== "#";
+      if (walkable && runStart === null) runStart = x;
+      else if (!walkable && runStart !== null) {
+        const length = x - runStart;
+        if (length >= 3) {
+          const strip = new THREE.Mesh(
+            new THREE.BoxGeometry(length * CELL * 0.9, 0.04, 0.35),
+            tactileMat,
+          );
+          strip.position.set(
+            runStart * CELL + (length * CELL) / 2,
+            0.02,
+            z * CELL + CELL / 2,
+          );
+          strip.receiveShadow = true;
+          group.add(strip);
+        }
+        runStart = null;
       }
-      this.current = next;
-    },
-  };
+    }
+  }
+
+  // --- 壁（低め、視認性確保） ---
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: wallColor, roughness: 0.65, metalness: 0.05,
+  });
+  const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+  for (let z = 0; z < stage.height; z++) {
+    for (let x = 0; x < stage.width; x++) {
+      if (stage.map[z][x] !== "#") continue;
+      const w = new THREE.Mesh(wallGeo, wallMat);
+      w.position.set(x * CELL + CELL / 2, WALL_H / 2, z * CELL + CELL / 2);
+      w.castShadow = true;
+      w.receiveShadow = true;
+      group.add(w);
+    }
+  }
+
+  // --- 壁の上に細い装飾ライン（accent色） ---
+  // 外周をぐるっと（低めのemission帯）
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: accentColor, emissive: accentColor, emissiveIntensity: 0.4,
+  });
+  const accentGeo = new THREE.BoxGeometry(stage.width * CELL, 0.05, 0.06);
+  const topStrip = new THREE.Mesh(accentGeo, accentMat);
+  topStrip.position.set(stage.width * CELL / 2, WALL_H + 0.02, 0.03);
+  group.add(topStrip);
+  const botStrip = new THREE.Mesh(accentGeo, accentMat);
+  botStrip.position.set(stage.width * CELL / 2, WALL_H + 0.02, stage.height * CELL - 0.03);
+  group.add(botStrip);
+
+  // --- ゴール: 青いトイレドア ---
+  const gx = stage.goal.x, gz = stage.goal.z;
+  const goalWp = gridToWorld(gx, gz);
+  // ドア本体（壁色を上書きするため、ゴールセル位置に新マテリアル箱を置く）
+  const wcDoorMat = new THREE.MeshStandardMaterial({
+    map: assets.signTex.wcdoor, color: 0xffffff, roughness: 0.5,
+  });
+  const doorMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(CELL * 0.8, 1.8, 0.15),
+    wcDoorMat,
+  );
+  // ドアは ゴールセルの北側辺(gz-1セルとの境界)に置く（壁面に貼り付け）
+  doorMesh.position.set(goalWp.x, 0.9, goalWp.z - CELL / 2 + 0.08);
+  doorMesh.castShadow = true;
+  group.add(doorMesh);
+  // ドア上の Restroom 看板
+  const restroomSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 0.7),
+    new THREE.MeshBasicMaterial({ map: assets.signTex.restroom, transparent: true }),
+  );
+  restroomSign.position.set(goalWp.x, WALL_H + 0.6, goalWp.z - CELL / 2 + 0.12);
+  group.add(restroomSign);
+  // ゴール強照明
+  const goalLight = new THREE.PointLight(0xfff0c8, 2.0, 6);
+  goalLight.position.set(goalWp.x, 1.7, goalWp.z - 0.3);
+  group.add(goalLight);
+  // ゴール床マーカー（緑光）
+  const goalFloor = new THREE.Mesh(
+    new THREE.CircleGeometry(0.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.5 }),
+  );
+  goalFloor.rotation.x = -Math.PI / 2;
+  goalFloor.position.set(goalWp.x, 0.03, goalWp.z);
+  group.add(goalFloor);
+
+  // --- スタート床マーカー（緑） ---
+  const sp = gridToWorld(stage.start.x, stage.start.z);
+  const startMark = new THREE.Mesh(
+    new THREE.CircleGeometry(0.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0x44dd80, transparent: true, opacity: 0.6 }),
+  );
+  startMark.rotation.x = -Math.PI / 2;
+  startMark.position.set(sp.x, 0.03, sp.z);
+  group.add(startMark);
+
+  // --- Exit 看板（ステージ上部の中央あたり、天井から吊り下げ） ---
+  const exitSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.8, 0.7),
+    new THREE.MeshBasicMaterial({ map: assets.signTex.exit, transparent: true }),
+  );
+  exitSign.position.set(stage.width * CELL / 2, WALL_H + 0.45, 1.2);
+  group.add(exitSign);
+
+  // --- Platform 看板（左側） ---
+  const platSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.2, 0.7),
+    new THREE.MeshBasicMaterial({ map: assets.signTex.platform, transparent: true }),
+  );
+  platSign.position.set(2.5, WALL_H + 0.45, 0.7);
+  group.add(platSign);
+
+  // --- がまんポスター（壁の外周内側に1〜2枚） ---
+  if (assets.signTex.gaman) {
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.0, 1.4),
+      new THREE.MeshBasicMaterial({ map: assets.signTex.gaman, transparent: true }),
+    );
+    poster.position.set(stage.width * CELL - 0.05, WALL_H - 0.1, stage.height * CELL / 2);
+    poster.rotation.y = -Math.PI / 2;
+    group.add(poster);
+  }
+
+  return group;
+}
+
+// ===== キャラ表示ヘルパー =====
+function setupCharacter(glbScene, targetHeight = PLAYER_H) {
+  // GLBは Y-up済 + _Root含むがバウンディングボックスから高さ正規化＋影設定
+  const root = new THREE.Group();
+  root.name = "CharRoot";
+  const clone = glbScene.clone(true);
+  // バウンディングボックスで高さ計測しスケール
+  const box = new THREE.Box3().setFromObject(clone);
+  const h = box.max.y - box.min.y;
+  const scale = targetHeight / h;
+  clone.scale.setScalar(scale);
+  // 足元を y=0 に
+  const newBox = new THREE.Box3().setFromObject(clone);
+  clone.position.y -= newBox.min.y;
+  clone.traverse((obj) => {
+    if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
+  });
+  root.add(clone);
+  // 丸影プレーン
+  const shadowGeo = new THREE.CircleGeometry(0.3, 24);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false,
+  });
+  const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.01;
+  root.add(shadow);
+  root.userData.body = clone;
+  root.userData.shadow = shadow;
+  return root;
 }
 
 // ===== ゲームステート =====
 const state = {
-  mode: "title", // title | playing | gameover | clear
+  mode: "title",
   stageIndex: 0,
   timeLeft: 0,
   dignity: 100,
@@ -468,11 +531,9 @@ const state = {
     turnTime: 0, turnDuration: 0,
   },
   enemies: [],
-  stageObj3D: null,
-  playerObj3D: null,
-  playerMixer: null,
-  enemyObj3Ds: [],
-  enemyMixers: [],
+  stageObj: null,
+  playerObj: null,
+  enemyObjs: [],
   keys: { left: false, right: false, forward: false, back: false },
   inputCooldown: 0,
   queuedAction: null,
@@ -480,13 +541,12 @@ const state = {
   paused: false,
 };
 
-// ===== ステージリスト UI =====
+// ===== UI =====
 function buildStageList() {
   if (!stageList) return;
   stageList.innerHTML = "";
   STAGES.forEach((stage, idx) => {
     const li = document.createElement("li");
-    li.dataset.index = String(idx);
     li.innerHTML = `<strong>${idx + 1}. ${stage.name}</strong><small>${stage.note}</small>`;
     li.addEventListener("click", () => {
       if (state.mode === "title" || state.mode === "clear" || state.mode === "gameover") {
@@ -505,72 +565,34 @@ function updateStageList() {
   });
 }
 
-function resetInputState() {
-  state.keys.left = false;
-  state.keys.right = false;
-  state.keys.forward = false;
-  state.keys.back = false;
-  state.inputCooldown = 0;
-  state.queuedAction = null;
-}
-
 // ===== ステージ開始 =====
 function startStage(index) {
   const stage = STAGES[index];
-  if (!stage || !assets.stages[index]) return;
+  if (!stage) return;
 
-  // 既存ステージ削除
-  if (state.stageObj3D) scene.remove(state.stageObj3D);
-  state.stageObj3D = assets.stages[index].clone(true);
-  // 床/壁は影を受ける、emission以外は影も落とす
-  state.stageObj3D.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.receiveShadow = true;
-      // エミッション強度がある=自発光オブジェクト(蛍光灯/看板)は影キャストしない
-      const mat = obj.material;
-      const isEmissive = mat && mat.emissiveIntensity > 0.5;
-      obj.castShadow = !isEmissive;
-      if (/overhead_sign|next_train_panel|station_map_panel/i.test(obj.name || "")) {
-        const opacity = /next_train_panel/i.test(obj.name || "") ? 0.12 : 0.22;
-        obj.material = softenCameraBlockerMaterial(obj.material, opacity);
-        obj.renderOrder = 2;
-      }
-    }
-  });
-  scene.add(state.stageObj3D);
+  if (state.stageObj) scene.remove(state.stageObj);
+  state.stageObj = buildStage(stage);
+  scene.add(state.stageObj);
 
-  // ★ プレイヤーはSprite (参照画像そのまま、カメラ常時正対)
-  if (state.playerObj3D) scene.remove(state.playerObj3D);
-  state.playerMixer = null;
-  const playerSprite = createCharacterSprite(assets.playerTex.idle, 1.50);
-  scene.add(playerSprite);
-  state.playerObj3D = playerSprite;
-  state.playerCtrl = spriteController(
-    playerSprite,
-    [assets.playerTex.idle, ...assets.playerTex.run],  // [idle, run1, run2, run3] の4テクスチャ
-    { fps: 8 },
-  );
+  // プレイヤー
+  if (state.playerObj) scene.remove(state.playerObj);
+  state.playerObj = setupCharacter(assets.charGLBs.player, PLAYER_H);
+  scene.add(state.playerObj);
 
-  // 敵生成
-  state.enemyObj3Ds.forEach((e) => scene.remove(e));
-  state.enemyObj3Ds = [];
-  state.enemyMixers = [];
+  // 敵
+  state.enemyObjs.forEach((e) => scene.remove(e));
+  state.enemyObjs = [];
   state.enemies = [];
-
-  const spawnOpen = stage.open.filter((c) => {
+  const stageOpen = stage.open.filter((c) => {
     if (c.x === stage.start.x && c.z === stage.start.z) return false;
     const startDist = Math.abs(c.x - stage.start.x) + Math.abs(c.z - stage.start.z);
-    return startDist >= 5;
+    return startDist >= 4;
   });
-  const stageOpen = spawnOpen.length >= stage.enemyCount
-    ? spawnOpen
-    : stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
   for (let i = 0; i < stage.enemyCount; i++) {
     const typeKey = stage.pool[i % stage.pool.length];
     const def = ENEMY_DEFS[typeKey];
-    const cell = stageOpen[(i * 7 + 3) % stageOpen.length];
+    const cell = stageOpen[(i * 7 + 3) % Math.max(stageOpen.length, 1)] || stage.open[0];
     const behavior = stage.behaviors[i % stage.behaviors.length];
-    // 初期方向: 隣接通路から1つ選ぶ
     const startDirs = DIRS.filter((d) => !isWall(stage, cell.x + d.dx, cell.z + d.dz));
     const startDir = startDirs.length > 0
       ? startDirs[Math.floor(Math.random() * startDirs.length)]
@@ -580,38 +602,31 @@ function startStage(index) {
       x: cell.x + 0.5,
       z: cell.z + 0.5,
       dx: startDir.dx, dz: startDir.dz,
+      yaw: Math.atan2(startDir.dx, startDir.dz),
       speed: stage.enemySpeed * def.speedMul,
-      def,
-      behavior,
+      def, behavior,
       turnTimer: rand(0.5, 1.5),
     };
     state.enemies.push(enemy);
-    // ★ 敵もSprite
-    const tex = assets.enemyTex[typeKey];
-    const sprite = createCharacterSprite(tex.idle, def.worldH || 1.30);
+    const obj = setupCharacter(assets.charGLBs[typeKey] || assets.charGLBs.business, 1.20);
     const wp = gridToWorld(enemy.x - 0.5, enemy.z - 0.5);
-    sprite.position.copy(wp);
-    scene.add(sprite);
-    state.enemyObj3Ds.push(sprite);
-    state.enemyMixers.push(spriteController(sprite, [tex.idle, ...tex.run], { fps: 5 }));
+    obj.position.copy(wp);
+    obj.rotation.y = enemy.yaw;
+    scene.add(obj);
+    state.enemyObjs.push(obj);
   }
-  // enemyMixersクリアは前ループで実施済
 
-  // プレイヤー初期化: 実際に通れる最短経路の初手へ向ける
+  // プレイヤー初期
   const sp = stage.start;
   const initDirIdx = startDirFor(stage);
   const initAngle = DIRS[initDirIdx].angle;
   Object.assign(state.player, {
-    x: sp.x + 0.5,
-    z: sp.z + 0.5,
-    fromX: sp.x + 0.5,
-    fromZ: sp.z + 0.5,
-    targetX: sp.x + 0.5,
-    targetZ: sp.z + 0.5,
+    x: sp.x + 0.5, z: sp.z + 0.5,
+    fromX: sp.x + 0.5, fromZ: sp.z + 0.5,
+    targetX: sp.x + 0.5, targetZ: sp.z + 0.5,
     dirIndex: initDirIdx,
     angle: initAngle,
-    fromAngle: initAngle,
-    targetAngle: initAngle,
+    fromAngle: initAngle, targetAngle: initAngle,
     moveTime: 0, moveDuration: 0,
     turnTime: 0, turnDuration: 0,
   });
@@ -621,8 +636,9 @@ function startStage(index) {
   state.timeLeft = stage.time;
   state.dignity = 100;
   state.hitTimer = 0;
+  state.inputCooldown = 0;
+  state.queuedAction = null;
   state.paused = false;
-  resetInputState();
 
   hideOverlay();
   if (stageNo) stageNo.textContent = `STAGE ${index + 1}`;
@@ -632,9 +648,8 @@ function startStage(index) {
 }
 
 // ===== 入力 =====
-function setHeld(key, active) {
-  if (key in state.keys) state.keys[key] = active;
-}
+function setHeld(k, on) { if (k in state.keys) state.keys[k] = on; }
+function isPlayerBusy() { return state.player.moveDuration > 0 || state.player.turnDuration > 0; }
 
 function tryAction(action, opts = {}) {
   if (state.mode !== "playing" || state.paused) return;
@@ -644,13 +659,10 @@ function tryAction(action, opts = {}) {
     return;
   }
   if (opts.repeat) state.inputCooldown = INPUT_REPEAT_DELAY;
-
-  switch (action) {
-    case "left":  startTurn(-1); break;
-    case "right": startTurn(1); break;
-    case "forward": startStep(1); break;
-    case "back":    startStep(-1); break;
-  }
+  if (action === "left") startTurn(-1);
+  else if (action === "right") startTurn(1);
+  else if (action === "forward") startStep(1);
+  else if (action === "back") startStep(-1);
 }
 
 function startTurn(dir) {
@@ -659,16 +671,15 @@ function startTurn(dir) {
   p.fromAngle = p.angle;
   p.targetAngle = DIRS[p.dirIndex].angle;
   p.turnTime = 0;
-  p.turnDuration = PLAYER_TURN_DURATION;
+  p.turnDuration = TURN_DURATION;
 }
 
 function startStep(forward) {
   const stage = STAGES[state.stageIndex];
   const p = state.player;
   const d = DIRS[p.dirIndex];
-  const moveDir = forward;
-  const nx = Math.round(p.x - 0.5) + d.dx * moveDir;
-  const nz = Math.round(p.z - 0.5) + d.dz * moveDir;
+  const nx = Math.round(p.x - 0.5) + d.dx * forward;
+  const nz = Math.round(p.z - 0.5) + d.dz * forward;
   if (isWall(stage, nx, nz)) {
     state.queuedAction = null;
     state.inputCooldown = INPUT_BLOCK_DELAY;
@@ -677,11 +688,7 @@ function startStep(forward) {
   p.fromX = p.x; p.fromZ = p.z;
   p.targetX = nx + 0.5; p.targetZ = nz + 0.5;
   p.moveTime = 0;
-  p.moveDuration = forward > 0 ? PLAYER_MOVE_DURATION : PLAYER_BACK_DURATION;
-}
-
-function isPlayerBusy() {
-  return state.player.moveDuration > 0 || state.player.turnDuration > 0;
+  p.moveDuration = forward > 0 ? MOVE_DURATION : BACK_DURATION;
 }
 
 function consumeQueuedAction() {
@@ -693,19 +700,18 @@ function consumeQueuedAction() {
 
 function updateHeldInput() {
   if (state.mode !== "playing" || isPlayerBusy() || state.queuedAction) return;
-  const action =
-    state.keys.forward ? "forward" :
-    state.keys.back ? "back" : null;
-  if (action) tryAction(action, { repeat: true });
+  const a = state.keys.forward ? "forward" :
+            state.keys.back ? "back" :
+            state.keys.left ? "left" :
+            state.keys.right ? "right" : null;
+  if (a) tryAction(a, { repeat: true });
 }
 
 // ===== ループ =====
 let lastTs = performance.now();
-
 function tick(now) {
   const dt = Math.min(0.05, (now - lastTs) / 1000);
   lastTs = now;
-
   if (state.mode === "playing" && !state.paused) {
     updatePlayer(dt);
     updateEnemies(dt);
@@ -719,62 +725,12 @@ function tick(now) {
     if (state.inputCooldown > 0) state.inputCooldown -= dt;
     if (state.hitTimer > 0) state.hitTimer -= dt;
   }
-
-  // (Spriteベース化のため AnimationMixer は不使用)
-
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 
-/**
- * 手続き型ウォークアニメーション
- * - 移動中: 上下バウンス + 前傾 + 左右ロック揺れ
- * - 停止中: 微小ブレス（idle bobbing）
- * - hit中:  左右シェイク
- * obj はGLB scene root（_Root正規化済み前提）
- */
-function applyWalkAnimation(obj, baseAngle, dt, opts) {
-  const isMoving = !!opts.isMoving;
-  const stepHz = opts.stepHz || 4.6; // 1秒あたり脚切替回数（≒歩行ピッチ）
-  const bobAmp = opts.bobAmp ?? 0.13;
-  const leanRad = opts.leanRad ?? 0.13; // 前傾角(7.5°)
-  const rollAmp = opts.rollAmp ?? 0.10; // 左右揺れ(5.7°)
-  const hitTimer = opts.hitTimer || 0;
-
-  if (typeof obj.userData.walkPhase !== "number") obj.userData.walkPhase = 0;
-  if (typeof obj.userData.idlePhase !== "number") obj.userData.idlePhase = Math.random() * Math.PI * 2;
-
-  obj.userData.idlePhase += dt;
-  if (isMoving) {
-    obj.userData.walkPhase += dt * stepHz * Math.PI * 2;
-  }
-
-  const walk = obj.userData.walkPhase;
-  const idle = obj.userData.idlePhase;
-
-  let bobY = 0, pitch = 0, roll = 0, shakeX = 0;
-
-  if (isMoving) {
-    bobY = Math.abs(Math.sin(walk * 0.5)) * bobAmp;
-    pitch = -leanRad; // 前傾
-    roll = Math.sin(walk * 0.5) * rollAmp;
-  } else {
-    bobY = (Math.sin(idle * 2.0) + 1) * 0.012; // ごく薄い呼吸
-    pitch = 0;
-    roll = 0;
-  }
-  if (hitTimer > 0) {
-    shakeX = Math.sin(performance.now() / 25) * 0.06 * hitTimer;
-  }
-
-  obj.position.y = bobY;
-  obj.position.x += shakeX;
-  obj.rotation.set(pitch, baseAngle, roll, "YXZ");
-}
-
 function updatePlayer(dt) {
   const p = state.player;
-  // 回転
   if (p.turnDuration > 0) {
     p.turnTime += dt;
     const t = Math.min(p.turnTime / p.turnDuration, 1);
@@ -783,42 +739,32 @@ function updatePlayer(dt) {
     while (delta > Math.PI) delta -= Math.PI * 2;
     while (delta < -Math.PI) delta += Math.PI * 2;
     p.angle = p.fromAngle + delta * e;
-    if (t >= 1) {
-      p.angle = p.targetAngle;
-      p.turnDuration = 0;
-    }
+    if (t >= 1) { p.angle = p.targetAngle; p.turnDuration = 0; }
   }
-  // 移動
   if (p.moveDuration > 0) {
     p.moveTime += dt;
     const t = Math.min(p.moveTime / p.moveDuration, 1);
     const e = easeInOut(t);
     p.x = p.fromX + (p.targetX - p.fromX) * e;
     p.z = p.fromZ + (p.targetZ - p.fromZ) * e;
-    if (t >= 1) {
-      p.x = p.targetX; p.z = p.targetZ;
-      p.moveDuration = 0;
-    }
+    if (t >= 1) { p.x = p.targetX; p.z = p.targetZ; p.moveDuration = 0; }
   }
-  // ★ Sprite位置更新 + アニメフレーム切替
-  if (state.playerObj3D) {
+  if (state.playerObj) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
-    state.playerObj3D.position.copy(wp);
-    // 走り中は少し上下バウンス
+    state.playerObj.position.x = wp.x;
+    state.playerObj.position.z = wp.z;
+    // 接地ベース + 走り中バウンス
+    let bobY = 0;
     if (p.moveDuration > 0) {
       const t = p.moveTime / p.moveDuration;
-      state.playerObj3D.position.y += Math.abs(Math.sin(t * Math.PI * 2)) * 0.06;
+      bobY = Math.abs(Math.sin(t * Math.PI * 2)) * 0.08;
     }
+    state.playerObj.position.y = bobY;
+    state.playerObj.rotation.y = p.angle;
     // hit中シェイク
     if (state.hitTimer > 0) {
-      state.playerObj3D.position.x += Math.sin(performance.now() / 25) * 0.05 * state.hitTimer;
+      state.playerObj.position.x += Math.sin(performance.now() / 25) * 0.05 * state.hitTimer;
     }
-    // 進行方向で左右反転（カメラから見て、進行方向が-Xなら左向き）
-    // playerは前方を見ているので、p.angle で判定。
-    // angle 0 = +Z, π/2 = +X (右向き), π = -Z, -π/2 = -X (左向き)
-    // sin(angle) > 0 なら +X向き = 右、< 0 なら -X向き = 左
-    const faceLeft = Math.sin(p.angle) < -0.1;
-    state.playerCtrl?.update(dt, p.moveDuration > 0, faceLeft);
   }
 }
 
@@ -827,18 +773,12 @@ function updateEnemies(dt) {
   state.enemies.forEach((e, idx) => {
     e.turnTimer -= dt;
     if (e.turnTimer <= 0) {
-      // 適当に向き選択（曲がり角で）
       const choices = [];
       for (const d of DIRS) {
         const nx = Math.round(e.x - 0.5) + d.dx;
         const nz = Math.round(e.z - 0.5) + d.dz;
         if (!isWall(stage, nx, nz)) choices.push(d);
       }
-      // patrol: 直進継続。曲がり角でランダム選択
-      // zigzag: 頻繁に方向転換
-      // blocker: ほぼ静止
-      // sprinter: 高速直進
-      // ambush: 時々ジャンプ
       if (e.behavior === "blocker") {
         if (Math.random() < 0.3 && choices.length > 0) {
           const c = choices[Math.floor(Math.random() * choices.length)];
@@ -852,7 +792,6 @@ function updateEnemies(dt) {
         }
         e.turnTimer = rand(0.5, 1.2);
       } else {
-        // patrol/sprinter/ambush
         const sameDir = choices.find((c) => c.dx === e.dx && c.dz === e.dz);
         if (sameDir && Math.random() < 0.75) {
           // 直進継続
@@ -863,62 +802,51 @@ function updateEnemies(dt) {
         e.turnTimer = rand(0.8, 2.0);
       }
     }
-    // 移動
-    const speedMul = e.behavior === "blocker" ? 0.3 : e.behavior === "sprinter" ? 1.4 : 1.0;
+    const speedMul = e.behavior === "blocker" ? 0.3 :
+                     e.behavior === "sprinter" ? 1.4 : 1.0;
     const speed = e.speed * speedMul;
     const nx = e.x + e.dx * speed * dt;
     const nz = e.z + e.dz * speed * dt;
-    // 衝突チェック
     const cellX = Math.round(nx - 0.5);
     const cellZ = Math.round(nz - 0.5);
     if (!isWall(stage, cellX, cellZ)) {
       e.x = nx; e.z = nz;
     } else {
-      // 反転
       e.dx = -e.dx; e.dz = -e.dz;
     }
-    // ★ Sprite位置更新 + フレーム切替（敵）
-    const sprite = state.enemyObj3Ds[idx];
-    if (sprite) {
+    // 進行方向に滑らかに旋回
+    const targetYaw = Math.atan2(e.dx, e.dz);
+    let delta = targetYaw - e.yaw;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const maxStep = 10 * dt;
+    e.yaw = Math.abs(delta) <= maxStep ? targetYaw : e.yaw + Math.sign(delta) * maxStep;
+
+    const obj = state.enemyObjs[idx];
+    if (obj) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
-      sprite.position.copy(wp);
-      // 軽くバウンス
-      const isMoving = e.behavior !== "blocker";
-      if (isMoving) {
-        sprite.position.y += Math.abs(Math.sin(performance.now() / 200 + idx)) * 0.04;
-      }
-      // 進行方向で左右反転
-      const faceLeft = e.dx < -0.1;
-      const ctrl = state.enemyMixers[idx];
-      if (ctrl) ctrl.update(dt, isMoving, faceLeft);
+      obj.position.x = wp.x;
+      obj.position.z = wp.z;
+      // バウンス
+      const bob = e.behavior === "blocker" ? 0 :
+                  Math.abs(Math.sin(performance.now() / 200 + idx)) * 0.05;
+      obj.position.y = bob;
+      obj.rotation.y = e.yaw;
     }
   });
 }
 
 function updateCamera() {
-  if (!state.playerObj3D) return;
-  const stage = STAGES[state.stageIndex];
-  const p = state.player;
-  const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
-  const ax = Math.sin(p.angle);
-  const az = Math.cos(p.angle);
-  let back = CAMERA_BACK;
-  while (back > CAMERA_MIN_BACK) {
-    const gx = worldToCellCoord(pWorld.x - ax * back);
-    const gz = worldToCellCoord(pWorld.z - az * back);
-    if (!isWall(stage, gx, gz)) break;
-    back -= 0.25;
-  }
-  camera.position.set(
-    pWorld.x - ax * back,
-    CAMERA_HEIGHT,
-    pWorld.z - az * back,
-  );
-  camera.lookAt(
-    pWorld.x + ax * CAMERA_LOOK_AHEAD,
-    CAMERA_LOOK_HEIGHT,
-    pWorld.z + az * CAMERA_LOOK_AHEAD,
-  );
+  if (!state.playerObj) return;
+  // プレイヤーをフレーム内に保つ程度に追従（強すぎないlerp）
+  const target = state.playerObj.position;
+  const offset = new THREE.Vector3(8, 12, 8);
+  const camTarget = target.clone().add(offset);
+  camera.position.lerp(camTarget, 0.08);
+  // 注視点もlerp（プレイヤー位置を追う）
+  const look = new THREE.Vector3(target.x, 0.5, target.z);
+  // OrthographicCameraはlookAtで姿勢が変わる
+  camera.lookAt(look);
 }
 
 function updateTimerAndDignity(dt) {
@@ -935,13 +863,11 @@ function updateTimerAndDignity(dt) {
 function updateHUD() {
   if (timeValue) timeValue.textContent = state.timeLeft.toFixed(1);
   if (dignityFill) dignityFill.style.width = `${Math.max(0, Math.min(100, state.dignity))}%`;
-  // 距離: 開始からゴールまでの進捗
   const stage = STAGES[state.stageIndex];
   const totalDist = Math.hypot(stage.goal.x - stage.start.x, stage.goal.z - stage.start.z);
   const curDist = Math.hypot(stage.goal.x - (state.player.x - 0.5), stage.goal.z - (state.player.z - 0.5));
   const pct = totalDist > 0 ? (1 - curDist / totalDist) * 100 : 0;
   if (distanceFill) distanceFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  // 表情
   if (facePortrait) {
     let src = "./assets/sprites/face-normal.png";
     if (state.dignity < 30) src = "./assets/sprites/face-limit.png";
@@ -953,10 +879,10 @@ function updateHUD() {
 function checkCollisions() {
   if (state.hitTimer > 0) return;
   const stage = STAGES[state.stageIndex];
-  const px = state.player.x; const pz = state.player.z;
+  const px = state.player.x, pz = state.player.z;
   for (const e of state.enemies) {
     const d2 = (e.x - px) ** 2 + (e.z - pz) ** 2;
-    const r = (e.def.hitRadius + 0.2);
+    const r = e.def.hitRadius + 0.18;
     if (d2 < r * r) {
       state.dignity -= stage.hitPenalty;
       state.hitTimer = 0.6;
@@ -974,29 +900,23 @@ function checkGoal() {
   const gx = stage.goal.x + 0.5;
   const gz = stage.goal.z + 0.5;
   const d2 = (state.player.x - gx) ** 2 + (state.player.z - gz) ** 2;
-  if (d2 < 0.5 * 0.5) {
-    clearStage();
-  }
+  if (d2 < 0.55 * 0.55) clearStage();
 }
 
 function clearStage() {
   state.mode = "clear";
-  resetInputState();
   state.cleared[state.stageIndex] = true;
   if (boardStatus) boardStatus.textContent = "クリア！";
   updateStageList();
-  const next = state.stageIndex + 1;
-  showOverlay("clear", { next });
+  showOverlay("clear", { next: state.stageIndex + 1 });
 }
 
 function gameOver() {
   state.mode = "gameover";
-  resetInputState();
   if (boardStatus) boardStatus.textContent = "失敗…";
   showOverlay("gameover");
 }
 
-// ===== オーバーレイ =====
 function showOverlay(type, opts = {}) {
   if (!screenLayer) return;
   screenLayer.classList.add("active");
@@ -1005,8 +925,8 @@ function showOverlay(type, opts = {}) {
   if (type === "title") {
     if (screenTitle) screenTitle.textContent = "トイレ我慢ゲーム";
     if (screenKicker) screenKicker.textContent = "満員電車後の尊厳防衛戦";
-    if (screenCopy) screenCopy.textContent = "TPS視点で駅構内の迷路を走り、トイレドアへ触れろ。";
-    screenActions.innerHTML = `<button class="primary" type="button" data-action="start">START</button>`;
+    if (screenCopy) screenCopy.textContent = "斜め俯瞰3Dで駅構内の迷路を走り、トイレドアへ触れろ。";
+    screenActions.innerHTML = `<button class="primary" data-action="start">START</button>`;
   } else if (type === "clear") {
     if (screenTitle) screenTitle.textContent = "クリア！";
     if (screenKicker) screenKicker.textContent = `STAGE ${state.stageIndex + 1} ${STAGES[state.stageIndex].name}`;
@@ -1021,7 +941,6 @@ function showOverlay(type, opts = {}) {
     if (screenCopy) screenCopy.textContent = "尊厳を守りきれなかった…";
     screenActions.innerHTML = `<button class="primary" data-action="retry">RETRY</button><button class="ghost" data-action="title">TITLE</button>`;
   }
-  // ボタンハンドラ
   screenActions.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       const a = btn.dataset.action;
@@ -1054,10 +973,6 @@ const KEY_MAP = {
 window.addEventListener("keydown", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) {
-    if ((k === "left" || k === "right") && ev.repeat) {
-      ev.preventDefault();
-      return;
-    }
     setHeld(k, true);
     tryAction(k);
     ev.preventDefault();
@@ -1071,9 +986,7 @@ window.addEventListener("keyup", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) setHeld(k, false);
 });
-window.addEventListener("blur", resetInputState);
 
-// タッチ/ボタン
 function bindButton(btn, action) {
   if (!btn) return;
   const down = (e) => { e.preventDefault(); setHeld(action, true); tryAction(action); };
@@ -1096,10 +1009,7 @@ if (pauseButton) {
   });
 }
 
-// ヘルパー
-function easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-}
+function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
 function rand(a, b) { return a + Math.random() * (b - a); }
 
 // ===== 起動 =====
@@ -1107,17 +1017,15 @@ async function bootstrap() {
   resizeRenderer();
   buildStageList();
   showTitle();
-  // ローディング表示
   if (screenCopy) screenCopy.textContent = "アセット読み込み中…";
   if (screenActions) screenActions.innerHTML = "";
   try {
     await loadAllAssets();
   } catch (err) {
     console.error("Asset load failed:", err);
-    if (screenCopy) screenCopy.textContent = "アセット読み込み失敗。コンソールを確認してください。";
+    if (screenCopy) screenCopy.textContent = "アセット読み込み失敗。コンソール確認。";
     return;
   }
-  console.log("Game ready");
   showOverlay("title");
   requestAnimationFrame(tick);
 }

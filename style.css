@@ -417,26 +417,27 @@ button {
   bottom: env(safe-area-inset-bottom, 0);
   z-index: 7;
   display: grid;
-  grid-template-columns: repeat(3, 58px);
+  grid-template-columns: repeat(3, 44px);
   grid-template-areas:
     "left forward right"
     ". back .";
-  gap: 8px;
+  gap: 6px;
   justify-content: end;
-  padding: 0 14px 10px;
+  padding: 0 10px 8px;
   pointer-events: none;
 }
 
 .touch-controls button {
-  width: 58px;
-  height: 54px;
-  background: rgba(244, 196, 48, 0.86);
+  width: 44px;
+  height: 40px;
+  background: rgba(244, 196, 48, 0.58);
   color: #111821;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 900;
   line-height: 1;
   pointer-events: auto;
-  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(4px);
 }
 
 .touch-controls button.is-held {
