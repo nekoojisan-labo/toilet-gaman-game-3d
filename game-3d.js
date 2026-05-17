@@ -213,15 +213,49 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202632);
 scene.fog = new THREE.Fog(0x202632, 30, 60);
 
-// === Orthographic Camera 斜め俯瞰固定 ===
-const ORTHO_FRUSTUM = 9;  // 表示範囲（縦方向のm）
-const aspect = canvas.clientWidth / canvas.clientHeight || (760 / 430);
-const camera = new THREE.OrthographicCamera(
-  -ORTHO_FRUSTUM * aspect, ORTHO_FRUSTUM * aspect,
-  ORTHO_FRUSTUM, -ORTHO_FRUSTUM, 0.1, 80
-);
-camera.position.set(8, 12, 8);
+// === Orthographic Camera 斜め俯瞰「完全固定」===
+// ステージ全体が常に映る。プレイヤー移動でもカメラは動かない
+const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+camera.position.set(0, 30, 0);
 camera.lookAt(0, 0, 0);
+
+// 現在のステージサイズを記録（resize時の再計算用）
+let currentStageMetrics = null;
+
+function applyStageCamera(stage) {
+  const stageW = stage.width * CELL;   // X方向の長さ (例: 30m)
+  const stageD = stage.height * CELL;  // Z方向の長さ (例: 14m)
+  const cx = stageW / 2;
+  const cz = stageD / 2;
+
+  const w = canvas.clientWidth || 760;
+  const h = canvas.clientHeight || 430;
+  const aspect = w / h;
+
+  // 斜め45度俯瞰: 投影面の横/縦のmax必要量
+  // 横方向はステージ全幅+余白、縦は深さ*cos45 + 高さ
+  const halfW = stageW / 2 + 1.2;
+  const halfH = stageD / 2 * 0.9 + 2.0;  // 斜め奥行きを考慮
+
+  // アスペクト比に応じて両方収まるよう orth size 決定
+  // halfSize は縦半径。 横半径 = halfSize * aspect
+  const sizeByWidth = halfW / aspect;
+  const sizeByHeight = halfH;
+  const halfSize = Math.max(sizeByWidth, sizeByHeight);
+
+  camera.left = -halfSize * aspect;
+  camera.right = halfSize * aspect;
+  camera.top = halfSize;
+  camera.bottom = -halfSize;
+  camera.updateProjectionMatrix();
+
+  // 斜め上からステージ中央を見る（45度斜め）
+  const distance = 28;
+  camera.position.set(cx + distance * 0.6, distance * 0.85, cz + distance * 0.6);
+  camera.lookAt(cx, 0.5, cz);
+
+  currentStageMetrics = { stage };
+}
 
 function resizeRenderer() {
   const w = canvas.clientWidth || 760;
@@ -229,12 +263,8 @@ function resizeRenderer() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
-  const a = w / h;
-  camera.left = -ORTHO_FRUSTUM * a;
-  camera.right = ORTHO_FRUSTUM * a;
-  camera.top = ORTHO_FRUSTUM;
-  camera.bottom = -ORTHO_FRUSTUM;
-  camera.updateProjectionMatrix();
+  // 表示サイズが変わったらカメラフラスタム再計算
+  if (currentStageMetrics) applyStageCamera(currentStageMetrics.stage);
 }
 window.addEventListener("resize", resizeRenderer);
 
@@ -574,6 +604,9 @@ function startStage(index) {
   state.stageObj = buildStage(stage);
   scene.add(state.stageObj);
 
+  // カメラをこのステージ全体に合わせて固定設定
+  applyStageCamera(stage);
+
   // プレイヤー
   if (state.playerObj) scene.remove(state.playerObj);
   state.playerObj = setupCharacter(assets.charGLBs.player, PLAYER_H);
@@ -837,16 +870,7 @@ function updateEnemies(dt) {
 }
 
 function updateCamera() {
-  if (!state.playerObj) return;
-  // プレイヤーをフレーム内に保つ程度に追従（強すぎないlerp）
-  const target = state.playerObj.position;
-  const offset = new THREE.Vector3(8, 12, 8);
-  const camTarget = target.clone().add(offset);
-  camera.position.lerp(camTarget, 0.08);
-  // 注視点もlerp（プレイヤー位置を追う）
-  const look = new THREE.Vector3(target.x, 0.5, target.z);
-  // OrthographicCameraはlookAtで姿勢が変わる
-  camera.lookAt(look);
+  // ★ カメラは完全固定（applyStageCameraで設定済）。毎フレーム動かさない
 }
 
 function updateTimerAndDignity(dt) {
