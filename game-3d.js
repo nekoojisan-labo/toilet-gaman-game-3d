@@ -7,6 +7,7 @@
  */
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/SkeletonUtils.js";
 
 // ===== 定数 =====
 const CELL_SIZE = 2.0;
@@ -299,17 +300,64 @@ async function loadAllAssets() {
   tasks.push(
     loader.loadAsync(`${GLB_BASE}/player-businessman.glb`).then((g) => {
       assets.player = g.scene;
+      assets.playerAnims = g.animations || [];
     }),
   );
   for (const [key, def] of Object.entries(ENEMY_DEFS)) {
     tasks.push(
       loader.loadAsync(`${GLB_BASE}/${def.glb}`).then((g) => {
         assets.enemies[key] = g.scene;
+        assets.enemyAnims = assets.enemyAnims || {};
+        assets.enemyAnims[key] = g.animations || [];
       }),
     );
   }
   await Promise.all(tasks);
-  console.log("All GLB assets loaded");
+  console.log("All GLB assets loaded", {
+    playerAnims: assets.playerAnims.map((a) => a.name),
+    enemyAnims: Object.fromEntries(
+      Object.entries(assets.enemyAnims || {}).map(([k, v]) => [k, v.map((a) => a.name)])
+    ),
+  });
+}
+
+/**
+ * GLBに含まれるwalk/idleアニメーションをAnimationMixerにセットアップ。
+ * 返り値: { mixer, walkAction, idleAction, current, play(name, fadeDuration) }
+ */
+function setupCharacterMixer(rootScene, animations, defaultName = "idle") {
+  if (!animations || animations.length === 0) return null;
+  const mixer = new THREE.AnimationMixer(rootScene);
+  const actions = {};
+  for (const clip of animations) {
+    const a = mixer.clipAction(clip);
+    a.setLoop(THREE.LoopRepeat);
+    a.clampWhenFinished = false;
+    actions[clip.name] = a;
+    // 名前の正規化（"Player_walk" → "walk"等）
+    const short = clip.name.split(/[_:]/).pop().toLowerCase();
+    if (!actions[short]) actions[short] = a;
+  }
+  // デフォルトを開始
+  let current = actions[defaultName] || actions["idle"] || Object.values(actions)[0];
+  if (current) current.play();
+  return {
+    mixer,
+    actions,
+    current,
+    play(name, fadeDuration = 0.2) {
+      const next = actions[name];
+      if (!next || next === this.current) return;
+      if (this.current) {
+        next.reset();
+        next.play();
+        next.crossFadeFrom(this.current, fadeDuration, false);
+      } else {
+        next.play();
+      }
+      this.current = next;
+    },
+  };
 }
 
 // ===== ゲームステート =====
@@ -329,7 +377,9 @@ const state = {
   enemies: [],
   stageObj3D: null,
   playerObj3D: null,
+  playerMixer: null,
   enemyObj3Ds: [],
+  enemyMixers: [],
   keys: { left: false, right: false, forward: false, back: false },
   inputCooldown: 0,
   queuedAction: null,
@@ -382,12 +432,10 @@ function startStage(index) {
   });
   scene.add(state.stageObj3D);
 
-  // プレイヤー追加 (clone + 原点正規化)
-  // Blender側で_Rootに-5/-8/...のXオフセットを付けているため、
-  // 「_Root世界座標が(0,0,0)」になるよう全直下の子をシフト。
-  // 以降は state.playerObj3D.position = wp で正しい位置に置ける。
+  // プレイヤー追加 (SkeletonUtils.clone でアーマチュアごと安全コピー + 原点正規化)
   if (state.playerObj3D) scene.remove(state.playerObj3D);
-  state.playerObj3D = assets.player.clone(true);
+  state.playerMixer = null;
+  state.playerObj3D = SkeletonUtils.clone(assets.player);
   const playerRoot = findCharacterRoot(state.playerObj3D, "player");
   if (playerRoot && playerRoot !== state.playerObj3D) {
     state.playerObj3D.updateMatrixWorld(true);
@@ -400,10 +448,13 @@ function startStage(index) {
     if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
   });
   scene.add(state.playerObj3D);
+  // walk/idle アニメーション接続
+  state.playerMixer = setupCharacterMixer(state.playerObj3D, assets.playerAnims, "idle");
 
   // 敵生成
   state.enemyObj3Ds.forEach((e) => scene.remove(e));
   state.enemyObj3Ds = [];
+  state.enemyMixers = [];
   state.enemies = [];
 
   const stageOpen = stage.open.filter((c) => !(c.x === stage.start.x && c.z === stage.start.z));
@@ -428,9 +479,9 @@ function startStage(index) {
       turnTimer: rand(0.5, 1.5),
     };
     state.enemies.push(enemy);
-    const mesh = assets.enemies[typeKey].clone(true);
+    // SkeletonUtils.cloneでアーマチュアもコピー
+    const mesh = SkeletonUtils.clone(assets.enemies[typeKey]);
     const root = findCharacterRoot(mesh, typeKey);
-    // 原点正規化: _Root世界座標が(0,0,0)になるよう全直下の子をシフト
     if (root && root !== mesh) {
       mesh.updateMatrixWorld(true);
       const rootWorld = new THREE.Vector3();
@@ -441,13 +492,17 @@ function startStage(index) {
     mesh.traverse((obj) => {
       if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; }
     });
-    // 初期位置（正規化済みなので mesh.position 直接でOK）
     const wp = gridToWorld(enemy.x - 0.5, enemy.z - 0.5);
     mesh.position.copy(wp);
     mesh.rotation.y = Math.atan2(enemy.dx, enemy.dz);
     scene.add(mesh);
     state.enemyObj3Ds.push(mesh);
+    // walk/idle アニメーション接続
+    const anims = (assets.enemyAnims || {})[typeKey];
+    state.enemyMixers.push(setupCharacterMixer(mesh, anims, "walk"));
   }
+  // enemyMixers配列リセット（forEachの前に）はループ前で行う
+  // (上書きでpushされていくが、最初にenemyObj3Dsクリアと同期する必要あり)
 
   // プレイヤー初期化: 実際に通れる最短経路の初手へ向ける
   const sp = stage.start;
@@ -547,8 +602,6 @@ function consumeQueuedAction() {
 function updateHeldInput() {
   if (state.mode !== "playing" || isPlayerBusy() || state.queuedAction) return;
   const action =
-    state.keys.left ? "left" :
-    state.keys.right ? "right" :
     state.keys.forward ? "forward" :
     state.keys.back ? "back" : null;
   if (action) tryAction(action, { repeat: true });
@@ -574,6 +627,10 @@ function tick(now) {
     if (state.inputCooldown > 0) state.inputCooldown -= dt;
     if (state.hitTimer > 0) state.hitTimer -= dt;
   }
+
+  // アニメーションミキサー更新（pause中も呼ぶ:停止中のidleアニメ継続）
+  if (state.playerMixer) state.playerMixer.mixer.update(dt);
+  state.enemyMixers.forEach((m) => { if (m) m.mixer.update(dt); });
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -653,18 +710,20 @@ function updatePlayer(dt) {
       p.moveDuration = 0;
     }
   }
-  // メッシュ反映。startStageで_Root原点を正規化済みなのでGLB scene全体を動かす。
+  // メッシュ反映
   if (state.playerObj3D) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
     state.playerObj3D.position.copy(wp);
-    applyWalkAnimation(state.playerObj3D, p.angle, dt, {
-      isMoving: p.moveDuration > 0,
-      stepHz: 5.4, // 主人公は急いでる
-      bobAmp: 0.14,
-      leanRad: 0.18,
-      rollAmp: 0.08,
-      hitTimer: state.hitTimer,
-    });
+    state.playerObj3D.rotation.y = p.angle;
+    // hit中だけ微シェイク
+    if (state.hitTimer > 0) {
+      state.playerObj3D.position.x += Math.sin(performance.now() / 25) * 0.06 * state.hitTimer;
+    }
+    // walk/idle切替
+    if (state.playerMixer) {
+      const wantWalk = p.moveDuration > 0;
+      state.playerMixer.play(wantWalk ? "walk" : "idle", 0.18);
+    }
   }
 }
 
@@ -723,12 +782,12 @@ function updateEnemies(dt) {
       // 反転
       e.dx = -e.dx; e.dz = -e.dz;
     }
-    // メッシュ反映 + ウォークアニメ
+    // メッシュ反映 + 進行方向回転 + walk/idle切替
     const mesh = state.enemyObj3Ds[idx];
     if (mesh) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
       mesh.position.copy(wp);
-      // 進行方向を向く（+Z正面想定）、滑らかに補間
+      // 進行方向に滑らかに旋回（+Z正面想定）
       const targetAngle = Math.atan2(e.dx, e.dz);
       const curYaw = mesh.userData.yaw ?? mesh.rotation.y;
       let delta = targetAngle - curYaw;
@@ -739,20 +798,21 @@ function updateEnemies(dt) {
         ? targetAngle
         : curYaw + Math.sign(delta) * maxStep;
       mesh.userData.yaw = newYaw;
-      // 振る舞い別ピッチ
-      const stepHz =
-        e.behavior === "blocker"  ? 0.0 :  // 静止: アニメ無し
-        e.behavior === "sprinter" ? 6.6 :
-        e.behavior === "zigzag"   ? 4.8 :
-        4.2;
-      const isMoving = e.behavior !== "blocker";
-      applyWalkAnimation(mesh, newYaw, dt, {
-        isMoving,
-        stepHz,
-        bobAmp: e.behavior === "sprinter" ? 0.16 : 0.11,
-        leanRad: e.behavior === "sprinter" ? 0.20 : 0.10,
-        rollAmp: e.behavior === "zigzag" ? 0.14 : 0.08,
-      });
+      mesh.rotation.y = newYaw;
+      // ボーンアニメ切替: blockerはidle、それ以外はwalk（振る舞い別の再生速度）
+      const mixer = state.enemyMixers[idx];
+      if (mixer) {
+        const wantWalk = e.behavior !== "blocker";
+        mixer.play(wantWalk ? "walk" : "idle", 0.18);
+        if (mixer.current) {
+          const targetSpeed =
+            e.behavior === "sprinter" ? 1.5 :
+            e.behavior === "zigzag"   ? 1.15 :
+            e.behavior === "blocker"  ? 1.0 :
+            0.95;
+          mixer.current.setEffectiveTimeScale(targetSpeed);
+        }
+      }
     }
   });
 }
@@ -904,6 +964,10 @@ const KEY_MAP = {
 window.addEventListener("keydown", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) {
+    if ((k === "left" || k === "right") && ev.repeat) {
+      ev.preventDefault();
+      return;
+    }
     setHeld(k, true);
     tryAction(k);
     ev.preventDefault();
