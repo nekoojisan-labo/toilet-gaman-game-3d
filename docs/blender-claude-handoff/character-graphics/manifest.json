@@ -1,0 +1,78 @@
+{
+  "schema": "toilet-gaman-character-graphics-v1",
+  "purpose": "Blender character modeling references for the 3D remake",
+  "style": {
+    "direction": "chibi anime 3D model sheet",
+    "tone": "comedic, anxious, non-explicit",
+    "proportions": "large head, compact body, readable silhouette",
+    "renderUse": "reference image for Blender modeling, not final in-game texture"
+  },
+  "files": [
+    {
+      "id": "player-businessman",
+      "path": "character-graphics/player-businessman-turnaround.png",
+      "role": "playable protagonist",
+      "contents": [
+        "front view",
+        "side view",
+        "back view",
+        "dynamic running pose"
+      ],
+      "modelingNotes": [
+        "dark navy suit",
+        "white shirt",
+        "loose blue striped tie",
+        "brown shoes",
+        "messy black hair",
+        "large anxious eyes",
+        "sweat drops",
+        "feet must align to floor origin"
+      ]
+    },
+    {
+      "id": "enemy-commuters",
+      "path": "character-graphics/enemy-commuters-reference.png",
+      "role": "enemy NPC archetypes",
+      "contents": [
+        "hurried businessman with briefcase",
+        "smartphone-walking office woman",
+        "student boy with backpack",
+        "traveler with rolling suitcase"
+      ],
+      "modelingNotes": [
+        "use one shared chibi base body where possible",
+        "separate accessories as independent meshes",
+        "briefcase, phone, shoulder bag, backpack, suitcase should be reusable props",
+        "traveler suitcase needs wider collision than the body"
+      ]
+    },
+    {
+      "id": "crowd-reactions",
+      "path": "character-graphics/crowd-reaction-expressions.png",
+      "role": "crowd and game-over reaction references",
+      "contents": [
+        "mocking laugh",
+        "pitying worried look",
+        "shocked stare",
+        "awkward avoidance",
+        "whispering pair",
+        "station staff concern"
+      ],
+      "modelingNotes": [
+        "use as expression and face-shape reference",
+        "make expressions readable from TPS camera distance",
+        "keep reactions comedic, not cruelly realistic",
+        "station staff can be a separate NPC variant"
+      ]
+    }
+  ],
+  "recommendedModels": [
+    "player-businessman.glb",
+    "enemy-business.glb",
+    "enemy-office-woman.glb",
+    "enemy-student.glb",
+    "enemy-traveler.glb",
+    "npc-station-staff.glb",
+    "npc-crowd-variants.glb"
+  ]
+}

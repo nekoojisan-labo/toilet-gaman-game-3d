@@ -1308,7 +1308,7 @@
             ctx.strokeStyle = "rgba(255,255,255,0.05)";
             ctx.lineWidth = 1;
             ctx.stroke();
-            if ((x + z) % 3 === 0) {
+            if ((x + z) % 3 === 0 && pts.length >= 4) {
               ctx.globalAlpha = 0.16;
               ctx.fillStyle = stage.accent;
               drawPolygon([midPoint(pts[0], pts[1]), pts[1], pts[2], midPoint(pts[2], pts[3])]);
@@ -1385,16 +1385,18 @@
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        const stripeA = side === "north" || side === "south" ? [pts[0], pts[1], pts[2], pts[3]] : [pts[1], pts[0], pts[3], pts[2]];
-        ctx.globalAlpha = 0.22;
-        ctx.fillStyle = stage.accent;
-        drawPolygon([
-          lerpPoint(stripeA[0], stripeA[3], 0.58),
-          lerpPoint(stripeA[1], stripeA[2], 0.58),
-          lerpPoint(stripeA[1], stripeA[2], 0.66),
-          lerpPoint(stripeA[0], stripeA[3], 0.66),
-        ]);
-        ctx.fill();
+        if (pts.length >= 4) {
+          const stripeA = side === "north" || side === "south" ? [pts[0], pts[1], pts[2], pts[3]] : [pts[1], pts[0], pts[3], pts[2]];
+          ctx.globalAlpha = 0.22;
+          ctx.fillStyle = stage.accent;
+          drawPolygon([
+            lerpPoint(stripeA[0], stripeA[3], 0.58),
+            lerpPoint(stripeA[1], stripeA[2], 0.58),
+            lerpPoint(stripeA[1], stripeA[2], 0.66),
+            lerpPoint(stripeA[0], stripeA[3], 0.66),
+          ]);
+          ctx.fill();
+        }
         ctx.restore();
       },
     });

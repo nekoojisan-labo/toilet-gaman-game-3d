@@ -1,0 +1,211 @@
+{
+  "schema": "toilet-gaman-stage-data-v1",
+  "grid": {
+    "width": 15,
+    "height": 7,
+    "cellSizeMeters": 2,
+    "legend": {
+      "#": "wall",
+      ".": "walkable",
+      "S": "start",
+      "G": "goal_restroom"
+    },
+    "coordinateRule": {
+      "gridX": "column index from left, 0 based",
+      "gridZ": "row index from top, 0 based",
+      "cellCenter": ["x + 0.5", "z + 0.5"],
+      "blenderMapping": {
+        "x": "gridX * cellSizeMeters",
+        "y": "-gridZ * cellSizeMeters",
+        "z": "height"
+      }
+    }
+  },
+  "player": {
+    "role": "salaryman protagonist",
+    "worldHeightCurrent": 1.34,
+    "radiusCurrent": 0.24,
+    "movement": "cell based",
+    "forwardStepDuration": 0.34,
+    "backStepDuration": 0.44,
+    "turnDuration": 0.18,
+    "directions": [
+      { "index": 0, "name": "right", "gridDelta": [1, 0], "angleRadians": 0 },
+      { "index": 1, "name": "front", "gridDelta": [0, 1], "angleRadians": 1.5707963267948966 },
+      { "index": 2, "name": "left", "gridDelta": [-1, 0], "angleRadians": 3.141592653589793 },
+      { "index": 3, "name": "back", "gridDelta": [0, -1], "angleRadians": -1.5707963267948966 }
+    ]
+  },
+  "enemyTypes": {
+    "business": {
+      "label": "急ぐビジネスマン",
+      "radius": 0.27,
+      "hitRadius": 0.18,
+      "speedMultiplier": 1.18,
+      "worldHeight": 1.44
+    },
+    "ol": {
+      "label": "スマホ歩き",
+      "radius": 0.25,
+      "hitRadius": 0.17,
+      "speedMultiplier": 1,
+      "worldHeight": 1.38
+    },
+    "student": {
+      "label": "学生の流れ",
+      "radius": 0.25,
+      "hitRadius": 0.17,
+      "speedMultiplier": 0.96,
+      "worldHeight": 1.38
+    },
+    "traveler": {
+      "label": "キャリーケース",
+      "radius": 0.4,
+      "hitRadius": 0.25,
+      "speedMultiplier": 0.82,
+      "worldHeight": 1.42
+    }
+  },
+  "stages": [
+    {
+      "id": "stage-01",
+      "name": "ホーム迷宮",
+      "note": "降車直後。正面から来る客はまだ素直",
+      "timeLimitSeconds": 22,
+      "dignityDrainPerSecond": 0.55,
+      "hitPenalty": 13,
+      "enemyCount": 6,
+      "enemyBaseSpeed": 0.92,
+      "behaviors": ["patrol", "patrol", "patrol"],
+      "enemyPool": ["student", "ol", "business"],
+      "theme": {
+        "accent": "#f4c430",
+        "wall": "#31495c",
+        "floor": "#6d6a61"
+      },
+      "map": [
+        "###############",
+        "#............G#",
+        "#...###..###..#",
+        "#.............#",
+        "#.S...........#",
+        "#.....###.....#",
+        "###############"
+      ],
+      "start": { "x": 2, "z": 4 },
+      "goal": { "x": 13, "z": 1 }
+    },
+    {
+      "id": "stage-02",
+      "name": "改札前ジグザグ",
+      "note": "スマホ歩きが左右へ読みにくく流れる",
+      "timeLimitSeconds": 23,
+      "dignityDrainPerSecond": 0.62,
+      "hitPenalty": 14,
+      "enemyCount": 8,
+      "enemyBaseSpeed": 0.98,
+      "behaviors": ["zigzag", "patrol", "zigzag"],
+      "enemyPool": ["ol", "student", "traveler"],
+      "theme": {
+        "accent": "#52b476",
+        "wall": "#385542",
+        "floor": "#656d58"
+      },
+      "map": [
+        "###############",
+        "#.....#......G#",
+        "#..#....#.....#",
+        "#........#....#",
+        "#.S........#..#",
+        "#....#........#",
+        "###############"
+      ],
+      "start": { "x": 2, "z": 4 },
+      "goal": { "x": 13, "z": 1 }
+    },
+    {
+      "id": "stage-03",
+      "name": "階段横の狭路",
+      "note": "キャリーケースが幅を取り、曲がり角を塞ぐ",
+      "timeLimitSeconds": 24,
+      "dignityDrainPerSecond": 0.72,
+      "hitPenalty": 15,
+      "enemyCount": 9,
+      "enemyBaseSpeed": 0.94,
+      "behaviors": ["blocker", "patrol", "zigzag", "blocker"],
+      "enemyPool": ["traveler", "traveler", "student", "business"],
+      "theme": {
+        "accent": "#d89535",
+        "wall": "#604a35",
+        "floor": "#726657"
+      },
+      "map": [
+        "###############",
+        "#..#.........G#",
+        "#..###..###...#",
+        "#.............#",
+        "#.S.....#.....#",
+        "#....#........#",
+        "###############"
+      ],
+      "start": { "x": 2, "z": 4 },
+      "goal": { "x": 13, "z": 1 }
+    },
+    {
+      "id": "stage-04",
+      "name": "巨大ターミナル",
+      "note": "急ぐビジネスマンが見つけると一直線に突っ込む",
+      "timeLimitSeconds": 23,
+      "dignityDrainPerSecond": 0.82,
+      "hitPenalty": 16,
+      "enemyCount": 11,
+      "enemyBaseSpeed": 1.06,
+      "behaviors": ["sprinter", "patrol", "zigzag", "sprinter"],
+      "enemyPool": ["business", "business", "ol", "traveler"],
+      "theme": {
+        "accent": "#d45c8b",
+        "wall": "#514061",
+        "floor": "#656070"
+      },
+      "map": [
+        "###############",
+        "#....#.......G#",
+        "#..##..##.....#",
+        "#.............#",
+        "#.S........#..#",
+        "#...#....#....#",
+        "###############"
+      ],
+      "start": { "x": 2, "z": 4 },
+      "goal": { "x": 13, "z": 1 }
+    },
+    {
+      "id": "stage-05",
+      "name": "トイレ前最終防衛線",
+      "note": "目前でフェイントと追跡が重なる",
+      "timeLimitSeconds": 25,
+      "dignityDrainPerSecond": 0.95,
+      "hitPenalty": 18,
+      "enemyCount": 13,
+      "enemyBaseSpeed": 1.12,
+      "behaviors": ["ambush", "sprinter", "zigzag", "blocker", "ambush"],
+      "enemyPool": ["business", "ol", "student", "traveler", "traveler"],
+      "theme": {
+        "accent": "#e1463f",
+        "wall": "#633839",
+        "floor": "#6f5b57"
+      },
+      "map": [
+        "###############",
+        "#...#........G#",
+        "#..#....#.....#",
+        "#.............#",
+        "#.S...#...#...#",
+        "#......#......#",
+        "###############"
+      ],
+      "start": { "x": 2, "z": 4 },
+      "goal": { "x": 13, "z": 1 }
+    }
+  ]
+}

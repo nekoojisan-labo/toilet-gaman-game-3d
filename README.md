@@ -55,6 +55,8 @@ http://localhost:8031/toilet-gaman-game/
 
 支給画像と生成画像は `assets/source/`、ゲームで使う透過PNGは `assets/sprites/` に保管しています。
 
+Blender / Claude で3D版を作り直すための引き継ぎ資料は `docs/blender-claude-handoff/` にまとめています。
+
 背景・ゲームオーバー演出では以下を使用します。
 
 - `assets/station-concourse-v2.png`

@@ -3,9 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>トイレ我慢ゲーム</title>
+    <title>トイレ我慢ゲーム 3D</title>
     <link rel="stylesheet" href="./style.css">
-    <script src="./game.js" defer></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./game-3d.js"></script>
   </head>
   <body>
     <main class="app" aria-label="トイレ我慢ゲーム">

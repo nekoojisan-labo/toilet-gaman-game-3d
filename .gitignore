@@ -13,3 +13,10 @@ __pycache__/
 # Editor/project local files
 .idea/
 .vscode/
+
+# Blender autosaves / temp
+*.blend1
+*.blend2
+
+# Test/scratch previews (keep main previews)
+assets-3d/_test_*.png
