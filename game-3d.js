@@ -19,12 +19,12 @@ const INPUT_BLOCK_DELAY = 0.24;
 const GLB_BASE = "./assets-3d/glb";
 
 // 4方向: gridDX, gridDZ, angle(Three.js Y軸まわり)
-// 注意: グリッドZ+方向 = Three.js Z+方向(前進)
+// Hyper3D生成キャラは+Z方向を正面として出力されるため、angle = atan2(dx, dz)
 const DIRS = [
-  { dx: 1, dz: 0, angle: Math.PI * 1.5 },   // right (グリッド+X)
-  { dx: 0, dz: 1, angle: Math.PI },         // front (グリッド+Z = 奥)
-  { dx: -1, dz: 0, angle: Math.PI / 2 },    // left
-  { dx: 0, dz: -1, angle: 0 },              // back
+  { dx: 1, dz: 0, angle: Math.PI / 2 },     // right (+X)
+  { dx: 0, dz: 1, angle: 0 },               // front (+Z)
+  { dx: -1, dz: 0, angle: -Math.PI / 2 },   // left (-X)
+  { dx: 0, dz: -1, angle: Math.PI },        // back (-Z)
 ];
 
 // ===== ステージデータ (game.jsと完全同期) =====
@@ -305,11 +305,16 @@ function startStage(index) {
     const def = ENEMY_DEFS[typeKey];
     const cell = stageOpen[(i * 7 + 3) % stageOpen.length];
     const behavior = stage.behaviors[i % stage.behaviors.length];
+    // 初期方向: 隣接通路から1つ選ぶ
+    const startDirs = DIRS.filter((d) => !isWall(stage, cell.x + d.dx, cell.z + d.dz));
+    const startDir = startDirs.length > 0
+      ? startDirs[Math.floor(Math.random() * startDirs.length)]
+      : DIRS[0];
     const enemy = {
       type: typeKey,
       x: cell.x + 0.5,
       z: cell.z + 0.5,
-      dx: 1, dz: 0,
+      dx: startDir.dx, dz: startDir.dz,
       speed: stage.enemySpeed * def.speedMul,
       def,
       behavior,
@@ -318,12 +323,23 @@ function startStage(index) {
     state.enemies.push(enemy);
     const mesh = assets.enemies[typeKey].clone(true);
     mesh.position.copy(gridToWorld(enemy.x - 0.5, enemy.z - 0.5));
+    // 初期向きを進行方向に合わせる
+    mesh.rotation.y = Math.atan2(enemy.dx, enemy.dz);
     scene.add(mesh);
     state.enemyObj3Ds.push(mesh);
   }
 
-  // プレイヤー初期化
+  // プレイヤー初期化: ゴール方向に向ける
   const sp = stage.start;
+  const goalDx = stage.goal.x - sp.x;
+  const goalDz = stage.goal.z - sp.z;
+  let initDirIdx = 0;
+  if (Math.abs(goalDx) >= Math.abs(goalDz)) {
+    initDirIdx = goalDx >= 0 ? 0 : 2;  // right or left
+  } else {
+    initDirIdx = goalDz >= 0 ? 1 : 3;  // front or back
+  }
+  const initAngle = DIRS[initDirIdx].angle;
   Object.assign(state.player, {
     x: sp.x + 0.5,
     z: sp.z + 0.5,
@@ -331,10 +347,10 @@ function startStage(index) {
     fromZ: sp.z + 0.5,
     targetX: sp.x + 0.5,
     targetZ: sp.z + 0.5,
-    dirIndex: 1, // front
-    angle: DIRS[1].angle,
-    fromAngle: DIRS[1].angle,
-    targetAngle: DIRS[1].angle,
+    dirIndex: initDirIdx,
+    angle: initAngle,
+    fromAngle: initAngle,
+    targetAngle: initAngle,
     moveTime: 0, moveDuration: 0,
     turnTime: 0, turnDuration: 0,
   });
@@ -553,8 +569,19 @@ function updateEnemies(dt) {
     if (mesh) {
       const wp = gridToWorld(e.x - 0.5, e.z - 0.5);
       mesh.position.copy(wp);
-      // 向き
-      mesh.rotation.y = Math.atan2(e.dx, e.dz) + Math.PI;
+      // 進行方向を向く（+Z正面想定）、滑らかに補間
+      const targetAngle = Math.atan2(e.dx, e.dz);
+      let cur = mesh.rotation.y;
+      let delta = targetAngle - cur;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      // 1フレームあたり最大10ラジアン/秒で旋回
+      const maxStep = 10 * dt;
+      if (Math.abs(delta) <= maxStep) {
+        mesh.rotation.y = targetAngle;
+      } else {
+        mesh.rotation.y = cur + Math.sign(delta) * maxStep;
+      }
     }
   });
 }
