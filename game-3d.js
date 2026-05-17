@@ -240,34 +240,44 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 14, 34);
+scene.background = new THREE.Color(0x1b2330);
+// フォグ薄め（駅構内の奥行き感は出しつつ視界確保）
+scene.fog = new THREE.Fog(0x1b2330, 20, 55);
 
 const camera = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 80);
 camera.position.set(0, 2, 0);
 
-// 半球光（自然な上下グラデーション）
-const hemi = new THREE.HemisphereLight(0xffffff, 0x3a3a4a, 0.85);
+// 環境光（全方位の最低照度を底上げ・暗い面を作らない）
+const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+scene.add(ambient);
+
+// 半球光（天井=白、床=暗い反射）
+const hemi = new THREE.HemisphereLight(0xfff5e0, 0x404050, 1.05);
 scene.add(hemi);
 
-// メイン照明（影付き）
-const dirLight = new THREE.DirectionalLight(0xfff4e0, 1.4);
-dirLight.position.set(8, 14, 6);
+// メイン照明（暖色、影付き、角度ゆるめ）
+const dirLight = new THREE.DirectionalLight(0xfff0d8, 1.6);
+dirLight.position.set(5, 16, 8);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1024, 1024);
-dirLight.shadow.camera.left = -20;
-dirLight.shadow.camera.right = 20;
-dirLight.shadow.camera.top = 20;
-dirLight.shadow.camera.bottom = -20;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -22;
+dirLight.shadow.camera.right = 22;
+dirLight.shadow.camera.top = 22;
+dirLight.shadow.camera.bottom = -22;
 dirLight.shadow.camera.near = 0.5;
-dirLight.shadow.camera.far = 40;
-dirLight.shadow.bias = -0.0008;
+dirLight.shadow.camera.far = 50;
+dirLight.shadow.bias = -0.0005;
 scene.add(dirLight);
 
-// フィルライト（影を柔らかく）
-const fillLight = new THREE.DirectionalLight(0xb8d4ff, 0.4);
-fillLight.position.set(-6, 8, -4);
+// フィルライト（寒色、反対側から）
+const fillLight = new THREE.DirectionalLight(0xc8dcff, 0.6);
+fillLight.position.set(-8, 10, -6);
 scene.add(fillLight);
+
+// 補助ライト（カメラ周辺、ローカル明るさ確保）
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.35);
+rimLight.position.set(0, 3, -10);
+scene.add(rimLight);
 
 function resizeRenderer() {
   const w = canvas.clientWidth || 760;
@@ -819,18 +829,28 @@ function updateEnemies(dt) {
 
 function updateCamera() {
   if (!state.playerObj3D) return;
+  const stage = STAGES[state.stageIndex];
   const p = state.player;
   const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
-  // 後方TPS: angle方向の逆 + 上
-  const back = 3.0;
   const ax = Math.sin(p.angle);
   const az = Math.cos(p.angle);
-  camera.position.set(
-    pWorld.x - ax * back,
-    1.8,
-    pWorld.z - az * back,
-  );
-  camera.lookAt(pWorld.x + ax * 2, 1.0, pWorld.z + az * 2);
+  // 通路幅2mに収まるよう、最大2.3m後方→壁にぶつかったら詰める
+  const MAX_BACK = 2.3;
+  const MIN_BACK = 0.8;
+  let back = MAX_BACK;
+  // 1段ずつ縮めて壁衝突回避
+  for (let step = 0; step < 8; step++) {
+    const cx = pWorld.x - ax * back;
+    const cz = pWorld.z - az * back;
+    // グリッドセル判定（壁なら次のステップで距離を縮める）
+    const gx = Math.floor(cx / CELL_SIZE);
+    const gz = Math.floor(cz / CELL_SIZE);
+    if (!isWall(stage, gx, gz)) break;
+    back = Math.max(MIN_BACK, back - 0.25);
+  }
+  // カメラ高さ少し上げて、見下ろし気味に
+  camera.position.set(pWorld.x - ax * back, 2.05, pWorld.z - az * back);
+  camera.lookAt(pWorld.x + ax * 1.6, 0.85, pWorld.z + az * 1.6);
 }
 
 function updateTimerAndDignity(dt) {
