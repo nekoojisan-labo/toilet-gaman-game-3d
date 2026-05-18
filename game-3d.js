@@ -1,10 +1,11 @@
 /**
- * トイレ我慢ゲーム 3D - 固定斜め俯瞰版
+ * トイレ我慢ゲーム 3D - TPS迷路版
  *
  * 設計方針:
- * - OrthographicCamera 斜め俯瞰固定
+ * - PerspectiveCamera の三人称後方視点
  * - ステージは Three.js Box/Plane で procedural 構築（GLB stage は不使用）
- * - 壁は低め(0.7m)で視認性確保
+ * - 当たり判定と見た目を同じグリッドから生成し、位置ズレを防ぐ
+ * - 壁は迷路感が出る高さにしつつ、カメラは壁衝突を避けて追従
  * - 黄色点字ブロック・青いトイレドア・案内サインで「駅」を記号化
  * - キャラのみ Hyper3D 生成 GLB を流用
  * - キャラに進行方向回転＋上下バウンス＋丸影で接地感を出す
@@ -14,15 +15,21 @@ import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 
 // ===== 定数 =====
 const CELL = 2.0;
-const WALL_H = 0.85;
+const WALL_H = 1.7;
 const PLAYER_H = 1.30;
-const MOVE_DURATION = 0.22;
-const BACK_DURATION = 0.30;
-const TURN_DURATION = 0.16;
+const MOVE_DURATION = 0.28;
+const BACK_DURATION = 0.34;
+const TURN_DURATION = 0.18;
 const INPUT_REPEAT_DELAY = 0.08;
 const INPUT_BLOCK_DELAY = 0.18;
 const GLB_BASE = "./assets-3d/glb";
 const TEX_BASE = "./assets-3d/textures";
+const CAMERA_BACK = 5.6;
+const CAMERA_MIN_BACK = 2.1;
+const CAMERA_HEIGHT = 3.0;
+const CAMERA_LOOK_HEIGHT = 0.95;
+const CAMERA_LOOK_AHEAD = 4.0;
+const CAMERA_LERP = 0.22;
 
 // 4方向: dx, dz が +Z正面前提
 const DIRS = [
@@ -35,83 +42,103 @@ const DIRS = [
 // ===== ステージデータ =====
 const STAGES = [
   {
-    name: "ホーム迷宮", note: "降車直後", time: 22, drain: 0.55, hitPenalty: 13,
-    enemyCount: 5, enemySpeed: 0.95,
+    name: "ホーム迷宮", note: "降車直後", time: 26, drain: 0.65, hitPenalty: 13,
+    enemyCount: 7, enemySpeed: 0.95,
     behaviors: ["patrol", "patrol", "patrol"],
     pool: ["student", "ol", "business"],
     accent: 0xf4c430, wallColor: 0x3a5570,
     map: [
-      "###############",
-      "#............G#",
-      "#...###..###..#",
-      "#.............#",
-      "#.S...........#",
-      "#.....###.....#",
-      "###############",
+      "#################",
+      "#.....#........G#",
+      "#.##..#.######..#",
+      "#..#..#......#..#",
+      "##.#.#######.#.##",
+      "#..#.....#...#..#",
+      "#.######.#.###..#",
+      "#...............#",
+      "#.#####.S.#####.#",
+      "#...............#",
+      "#################",
     ],
   },
   {
-    name: "改札前ジグザグ", note: "スマホ歩き", time: 23, drain: 0.62, hitPenalty: 14,
-    enemyCount: 7, enemySpeed: 1.0,
+    name: "改札前ジグザグ", note: "スマホ歩き", time: 27, drain: 0.72, hitPenalty: 14,
+    enemyCount: 8, enemySpeed: 1.0,
     behaviors: ["zigzag", "patrol", "zigzag"],
     pool: ["ol", "student", "traveler"],
     accent: 0x52b476, wallColor: 0x3e5a48,
     map: [
-      "###############",
-      "#.....#......G#",
-      "#..#....#.....#",
-      "#........#....#",
-      "#.S........#..#",
-      "#....#........#",
-      "###############",
+      "#################",
+      "#...#.....#....G#",
+      "###.#.###.#.###.#",
+      "#...#.#...#...#.#",
+      "#.###.#.#####.#.#",
+      "#.....#.....#.#.#",
+      "#.#########.#.#.#",
+      "#.#.........#...#",
+      "#.#.###.S.#####.#",
+      "#...............#",
+      "#################",
     ],
   },
   {
-    name: "階段横の狭路", note: "キャリーケース", time: 24, drain: 0.72, hitPenalty: 15,
-    enemyCount: 8, enemySpeed: 0.96,
+    name: "階段横の狭路", note: "キャリーケース", time: 28, drain: 0.82, hitPenalty: 15,
+    enemyCount: 9, enemySpeed: 0.96,
     behaviors: ["blocker", "patrol", "zigzag"],
     pool: ["traveler", "traveler", "student", "business"],
     accent: 0xd89535, wallColor: 0x6a503a,
     map: [
-      "###############",
-      "#..#.........G#",
-      "#..###..###...#",
-      "#.............#",
-      "#.S.....#.....#",
-      "#....#........#",
-      "###############",
+      "#################",
+      "#.....#...#....G#",
+      "#.###.#.#.#.###.#",
+      "#...#...#...#...#",
+      "###.#########.###",
+      "#...#.......#...#",
+      "#.###.#####.###.#",
+      "#.....#...#.....#",
+      "#.#####.S.#####.#",
+      "#...............#",
+      "#################",
     ],
   },
   {
-    name: "巨大ターミナル", note: "急ぐビジネスマン", time: 23, drain: 0.82, hitPenalty: 16,
-    enemyCount: 10, enemySpeed: 1.08,
+    name: "巨大ターミナル", note: "急ぐビジネスマン", time: 29, drain: 0.92, hitPenalty: 16,
+    enemyCount: 11, enemySpeed: 1.08,
     behaviors: ["sprinter", "patrol", "zigzag"],
     pool: ["business", "business", "ol", "traveler"],
     accent: 0xd45c8b, wallColor: 0x584360,
     map: [
-      "###############",
-      "#....#.......G#",
-      "#..##..##.....#",
-      "#.............#",
-      "#.S........#..#",
-      "#...#....#....#",
-      "###############",
+      "#################",
+      "#.#.......#....G#",
+      "#.#.#####.#.###.#",
+      "#...#...#.#...#.#",
+      "#####.#.#.###.#.#",
+      "#.....#.#.....#.#",
+      "#.#####.#######.#",
+      "#.#.............#",
+      "#.#.###.S.#####.#",
+      "#...............#",
+      "#################",
     ],
   },
   {
-    name: "トイレ前最終防衛線", note: "目前で追跡", time: 25, drain: 0.95, hitPenalty: 18,
-    enemyCount: 12, enemySpeed: 1.15,
+    name: "トイレ前最終防衛線", note: "目前で追跡", time: 30, drain: 1.05, hitPenalty: 18,
+    enemyCount: 13, enemySpeed: 1.15,
     behaviors: ["ambush", "sprinter", "zigzag", "blocker"],
     pool: ["business", "ol", "student", "traveler"],
     accent: 0xe1463f, wallColor: 0x603a3a,
     map: [
-      "###############",
-      "#...#........G#",
-      "#..#....#.....#",
-      "#.............#",
-      "#.S...#...#...#",
-      "#......#......#",
-      "###############",
+      "#################",
+      "#.....#.....#..G#",
+      "###.#.#.###.#.###",
+      "#...#.#...#.#...#",
+      "#.###.###.#.###.#",
+      "#.#.....#.#.....#",
+      "#.#.###.#.#####.#",
+      "#...#.........#.#",
+      "#.###.#.S.###.#.#",
+      "#...............#",
+      "#################",
     ],
   },
 ].map((s, i) => ({ ...s, ...parseMap(s.map), index: i }));
@@ -170,14 +197,65 @@ function cellDistance(stage, from, to) {
 }
 
 function startDirFor(stage) {
+  // TPS迷路として、開始時はまず奥へ走れる向きにする。
+  // ここが横向きだと「前進したのに横へ滑る」ように感じやすい。
+  const northIndex = 3;
+  const north = DIRS[northIndex];
+  const nx0 = stage.start.x + north.dx;
+  const nz0 = stage.start.z + north.dz;
+  if (!isWall(stage, nx0, nz0) && cellDistance(stage, { x: nx0, z: nz0 }, stage.goal) < Infinity) {
+    return northIndex;
+  }
   let best = null;
   DIRS.forEach((dir, index) => {
     const nx = stage.start.x + dir.dx, nz = stage.start.z + dir.dz;
     if (isWall(stage, nx, nz)) return;
     const score = cellDistance(stage, { x: nx, z: nz }, stage.goal);
-    if (!best || score < best.score) best = { index, score };
+    const direct = Math.abs(stage.goal.x - nx) + Math.abs(stage.goal.z - nz);
+    if (!best || score < best.score || (score === best.score && direct < best.direct)) {
+      best = { index, score, direct };
+    }
   });
   return best ? best.index : 1;
+}
+
+function shortestPath(stage, from = stage.start, to = stage.goal) {
+  const start = from;
+  const goal = to;
+  const queue = [{ x: start.x, z: start.z }];
+  const seen = new Set([cellKey(start.x, start.z)]);
+  const prev = new Map();
+  for (let i = 0; i < queue.length; i++) {
+    const cur = queue[i];
+    if (cur.x === goal.x && cur.z === goal.z) break;
+    for (const dir of DIRS) {
+      const nx = cur.x + dir.dx;
+      const nz = cur.z + dir.dz;
+      const key = cellKey(nx, nz);
+      if (seen.has(key) || isWall(stage, nx, nz)) continue;
+      seen.add(key);
+      prev.set(key, cur);
+      queue.push({ x: nx, z: nz });
+    }
+  }
+  const goalKey = cellKey(goal.x, goal.z);
+  if (!seen.has(goalKey)) return [];
+  const path = [];
+  let cur = goal;
+  while (cur) {
+    path.push(cur);
+    if (cur.x === start.x && cur.z === start.z) break;
+    cur = prev.get(cellKey(cur.x, cur.z));
+  }
+  return path.reverse();
+}
+
+function guidancePath(stage) {
+  const north = { x: stage.start.x, z: stage.start.z - 1 };
+  if (!isWall(stage, north.x, north.z) && cellDistance(stage, north, stage.goal) < Infinity) {
+    return [stage.start, ...shortestPath(stage, north, stage.goal)];
+  }
+  return shortestPath(stage);
 }
 
 // ===== DOM =====
@@ -213,48 +291,19 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x202632);
 scene.fog = new THREE.Fog(0x202632, 30, 60);
 
-// === Orthographic Camera 斜め俯瞰「完全固定」===
-// ステージ全体が常に映る。プレイヤー移動でもカメラは動かない
-const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
-camera.position.set(0, 30, 0);
-camera.lookAt(0, 0, 0);
+// === TPS Camera ===
+// プレイヤーの背後から通路を見る。迷路の圧迫感を出しつつ、壁に入らないように追従する。
+const camera = new THREE.PerspectiveCamera(62, canvas.width / canvas.height, 0.1, 100);
+camera.position.set(0, CAMERA_HEIGHT, 0);
 
 // 現在のステージサイズを記録（resize時の再計算用）
 let currentStageMetrics = null;
+const cameraDesired = new THREE.Vector3();
+const cameraLookAt = new THREE.Vector3();
 
 function applyStageCamera(stage) {
-  const stageW = stage.width * CELL;   // X方向の長さ (例: 30m)
-  const stageD = stage.height * CELL;  // Z方向の長さ (例: 14m)
-  const cx = stageW / 2;
-  const cz = stageD / 2;
-
-  const w = canvas.clientWidth || 760;
-  const h = canvas.clientHeight || 430;
-  const aspect = w / h;
-
-  // 斜め45度俯瞰: 投影面の横/縦のmax必要量
-  // 横方向はステージ全幅+余白、縦は深さ*cos45 + 高さ
-  const halfW = stageW / 2 + 1.2;
-  const halfH = stageD / 2 * 0.9 + 2.0;  // 斜め奥行きを考慮
-
-  // アスペクト比に応じて両方収まるよう orth size 決定
-  // halfSize は縦半径。 横半径 = halfSize * aspect
-  const sizeByWidth = halfW / aspect;
-  const sizeByHeight = halfH;
-  const halfSize = Math.max(sizeByWidth, sizeByHeight);
-
-  camera.left = -halfSize * aspect;
-  camera.right = halfSize * aspect;
-  camera.top = halfSize;
-  camera.bottom = -halfSize;
-  camera.updateProjectionMatrix();
-
-  // 斜め上からステージ中央を見る（45度斜め）
-  const distance = 28;
-  camera.position.set(cx + distance * 0.6, distance * 0.85, cz + distance * 0.6);
-  camera.lookAt(cx, 0.5, cz);
-
   currentStageMetrics = { stage };
+  updateCamera(true);
 }
 
 function resizeRenderer() {
@@ -263,8 +312,9 @@ function resizeRenderer() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
-  // 表示サイズが変わったらカメラフラスタム再計算
-  if (currentStageMetrics) applyStageCamera(currentStageMetrics.stage);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  if (currentStageMetrics) updateCamera(true);
 }
 window.addEventListener("resize", resizeRenderer);
 
@@ -379,38 +429,26 @@ function buildStage(stage) {
   }
 
   // --- 黄色点字ブロック ---
-  // 通路の各行で、開始セルからゴール方向に沿った点字ブロックを敷く
+  // 最短経路にだけ敷く。迷路の緊張感は残しつつ、トイレ方向の手がかりにする。
   const tactileMat = new THREE.MeshStandardMaterial({
     color: 0xf2c61f, roughness: 0.6, emissive: 0xb09010, emissiveIntensity: 0.18,
   });
-  // 単純：S と G を含む行全体（または接続行）に細長い帯を敷く
-  for (let z = 0; z < stage.height; z++) {
-    // この行で連続する通路を見つけて1本のストリップに
-    let runStart = null;
-    for (let x = 0; x <= stage.width; x++) {
-      const walkable = x < stage.width && stage.map[z][x] !== "#";
-      if (walkable && runStart === null) runStart = x;
-      else if (!walkable && runStart !== null) {
-        const length = x - runStart;
-        if (length >= 3) {
-          const strip = new THREE.Mesh(
-            new THREE.BoxGeometry(length * CELL * 0.9, 0.04, 0.35),
-            tactileMat,
-          );
-          strip.position.set(
-            runStart * CELL + (length * CELL) / 2,
-            0.02,
-            z * CELL + CELL / 2,
-          );
-          strip.receiveShadow = true;
-          group.add(strip);
-        }
-        runStart = null;
-      }
-    }
+  const path = guidancePath(stage);
+  const tactileGeo = new THREE.BoxGeometry(CELL * 0.58, 0.045, CELL * 0.18);
+  for (let i = 0; i < path.length; i++) {
+    const cur = path[i];
+    const next = path[i + 1] || cur;
+    const prev = path[i - 1] || cur;
+    const dx = next.x - prev.x;
+    const dz = next.z - prev.z;
+    const block = new THREE.Mesh(tactileGeo, tactileMat);
+    block.position.set(cur.x * CELL + CELL / 2, 0.025, cur.z * CELL + CELL / 2);
+    if (Math.abs(dz) > Math.abs(dx)) block.rotation.y = Math.PI / 2;
+    block.receiveShadow = true;
+    group.add(block);
   }
 
-  // --- 壁（低め、視認性確保） ---
+  // --- 壁（迷路感を出す高さ。カメラ側で壁侵入を避ける） ---
   const wallMat = new THREE.MeshStandardMaterial({
     color: wallColor, roughness: 0.65, metalness: 0.05,
   });
@@ -568,6 +606,10 @@ const state = {
   inputCooldown: 0,
   queuedAction: null,
   hitTimer: 0,
+  blockedTime: 0,
+  blockedDuration: 0,
+  blockedDx: 0,
+  blockedDz: 0,
   paused: false,
 };
 
@@ -595,6 +637,23 @@ function updateStageList() {
   });
 }
 
+const ACTION_BUTTONS = {
+  left: turnLeftBtn,
+  right: turnRightBtn,
+  forward: forwardBtn,
+  back: backBtn,
+};
+
+function resetInputState() {
+  state.keys.left = false;
+  state.keys.right = false;
+  state.keys.forward = false;
+  state.keys.back = false;
+  state.inputCooldown = 0;
+  state.queuedAction = null;
+  Object.values(ACTION_BUTTONS).forEach((btn) => btn?.classList.remove("is-held"));
+}
+
 // ===== ステージ開始 =====
 function startStage(index) {
   const stage = STAGES[index];
@@ -603,9 +662,6 @@ function startStage(index) {
   if (state.stageObj) scene.remove(state.stageObj);
   state.stageObj = buildStage(stage);
   scene.add(state.stageObj);
-
-  // カメラをこのステージ全体に合わせて固定設定
-  applyStageCamera(stage);
 
   // プレイヤー
   if (state.playerObj) scene.remove(state.playerObj);
@@ -669,10 +725,14 @@ function startStage(index) {
   state.timeLeft = stage.time;
   state.dignity = 100;
   state.hitTimer = 0;
-  state.inputCooldown = 0;
-  state.queuedAction = null;
+  state.blockedTime = 0;
+  state.blockedDuration = 0;
+  state.blockedDx = 0;
+  state.blockedDz = 0;
   state.paused = false;
+  resetInputState();
 
+  applyStageCamera(stage);
   hideOverlay();
   if (stageNo) stageNo.textContent = `STAGE ${index + 1}`;
   if (stageName) stageName.textContent = stage.name;
@@ -681,7 +741,10 @@ function startStage(index) {
 }
 
 // ===== 入力 =====
-function setHeld(k, on) { if (k in state.keys) state.keys[k] = on; }
+function setHeld(k, on) {
+  if (k in state.keys) state.keys[k] = on;
+  ACTION_BUTTONS[k]?.classList.toggle("is-held", on);
+}
 function isPlayerBusy() { return state.player.moveDuration > 0 || state.player.turnDuration > 0; }
 
 function tryAction(action, opts = {}) {
@@ -716,12 +779,19 @@ function startStep(forward) {
   if (isWall(stage, nx, nz)) {
     state.queuedAction = null;
     state.inputCooldown = INPUT_BLOCK_DELAY;
+    state.hitTimer = Math.max(state.hitTimer, 0.16);
+    state.blockedTime = 0;
+    state.blockedDuration = 0.16;
+    state.blockedDx = d.dx * forward;
+    state.blockedDz = d.dz * forward;
+    if (boardStatus) boardStatus.textContent = "壁。向きを変えて進め";
     return;
   }
   p.fromX = p.x; p.fromZ = p.z;
   p.targetX = nx + 0.5; p.targetZ = nz + 0.5;
   p.moveTime = 0;
   p.moveDuration = forward > 0 ? MOVE_DURATION : BACK_DURATION;
+  if (boardStatus) boardStatus.textContent = `STAGE ${state.stageIndex + 1} 進行中`;
 }
 
 function consumeQueuedAction() {
@@ -734,9 +804,7 @@ function consumeQueuedAction() {
 function updateHeldInput() {
   if (state.mode !== "playing" || isPlayerBusy() || state.queuedAction) return;
   const a = state.keys.forward ? "forward" :
-            state.keys.back ? "back" :
-            state.keys.left ? "left" :
-            state.keys.right ? "right" : null;
+            state.keys.back ? "back" : null;
   if (a) tryAction(a, { repeat: true });
 }
 
@@ -784,8 +852,18 @@ function updatePlayer(dt) {
   }
   if (state.playerObj) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
-    state.playerObj.position.x = wp.x;
-    state.playerObj.position.z = wp.z;
+    let blockX = 0;
+    let blockZ = 0;
+    if (state.blockedDuration > 0) {
+      state.blockedTime += dt;
+      const t = Math.min(state.blockedTime / state.blockedDuration, 1);
+      const bump = Math.sin(t * Math.PI) * 0.14 * CELL;
+      blockX = state.blockedDx * bump;
+      blockZ = state.blockedDz * bump;
+      if (t >= 1) state.blockedDuration = 0;
+    }
+    state.playerObj.position.x = wp.x + blockX;
+    state.playerObj.position.z = wp.z + blockZ;
     // 接地ベース + 走り中バウンス
     let bobY = 0;
     if (p.moveDuration > 0) {
@@ -869,8 +947,38 @@ function updateEnemies(dt) {
   });
 }
 
-function updateCamera() {
-  // ★ カメラは完全固定（applyStageCameraで設定済）。毎フレーム動かさない
+function updateCamera(snap = false) {
+  if (!state.playerObj || state.mode !== "playing") return;
+  const stage = STAGES[state.stageIndex];
+  const p = state.player;
+  const pWorld = gridToWorld(p.x - 0.5, p.z - 0.5);
+  const ax = Math.sin(p.angle);
+  const az = Math.cos(p.angle);
+
+  let back = CAMERA_BACK;
+  while (back > CAMERA_MIN_BACK) {
+    const cx = Math.floor((pWorld.x - ax * back) / CELL);
+    const cz = Math.floor((pWorld.z - az * back) / CELL);
+    const outside = cx < 0 || cz < 0 || cx >= stage.width || cz >= stage.height;
+    if (outside) break;
+    if (!isWall(stage, cx, cz)) break;
+    back -= 0.25;
+  }
+
+  cameraDesired.set(
+    pWorld.x - ax * back,
+    CAMERA_HEIGHT,
+    pWorld.z - az * back,
+  );
+  cameraLookAt.set(
+    pWorld.x + ax * CAMERA_LOOK_AHEAD,
+    CAMERA_LOOK_HEIGHT,
+    pWorld.z + az * CAMERA_LOOK_AHEAD,
+  );
+
+  if (snap) camera.position.copy(cameraDesired);
+  else camera.position.lerp(cameraDesired, CAMERA_LERP);
+  camera.lookAt(cameraLookAt);
 }
 
 function updateTimerAndDignity(dt) {
@@ -929,6 +1037,7 @@ function checkGoal() {
 
 function clearStage() {
   state.mode = "clear";
+  resetInputState();
   state.cleared[state.stageIndex] = true;
   if (boardStatus) boardStatus.textContent = "クリア！";
   updateStageList();
@@ -937,6 +1046,7 @@ function clearStage() {
 
 function gameOver() {
   state.mode = "gameover";
+  resetInputState();
   if (boardStatus) boardStatus.textContent = "失敗…";
   showOverlay("gameover");
 }
@@ -949,7 +1059,7 @@ function showOverlay(type, opts = {}) {
   if (type === "title") {
     if (screenTitle) screenTitle.textContent = "トイレ我慢ゲーム";
     if (screenKicker) screenKicker.textContent = "満員電車後の尊厳防衛戦";
-    if (screenCopy) screenCopy.textContent = "斜め俯瞰3Dで駅構内の迷路を走り、トイレドアへ触れろ。";
+    if (screenCopy) screenCopy.textContent = "TPS視点で駅構内の迷路を走り、トイレドアへ触れろ。";
     screenActions.innerHTML = `<button class="primary" data-action="start">START</button>`;
   } else if (type === "clear") {
     if (screenTitle) screenTitle.textContent = "クリア！";
@@ -997,6 +1107,10 @@ const KEY_MAP = {
 window.addEventListener("keydown", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) {
+    if ((k === "left" || k === "right") && ev.repeat) {
+      ev.preventDefault();
+      return;
+    }
     setHeld(k, true);
     tryAction(k);
     ev.preventDefault();
@@ -1010,6 +1124,7 @@ window.addEventListener("keyup", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) setHeld(k, false);
 });
+window.addEventListener("blur", resetInputState);
 
 function bindButton(btn, action) {
   if (!btn) return;
