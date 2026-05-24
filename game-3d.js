@@ -22,6 +22,13 @@ const BACK_DURATION = 0.34;
 const TURN_DURATION = 0.18;
 const INPUT_REPEAT_DELAY = 0.08;
 const INPUT_BLOCK_DELAY = 0.18;
+const DODGE_DURATION = 0.52;
+const DODGE_STARTUP = 0.06;
+const DODGE_WINDOW = 0.30;
+const DODGE_COOLDOWN = 1.15;
+const DODGE_CELL_OFFSET = 0.46;
+const DODGE_SUCCESS_RADIUS = 0.95;
+const DODGE_REWARD = 2.5;
 const GLB_BASE = "./assets-3d/glb";
 const TEX_BASE = "./assets-3d/textures";
 const CAMERA_BACK = 5.6;
@@ -278,6 +285,7 @@ const turnLeftBtn = document.getElementById("leftButton");
 const turnRightBtn = document.getElementById("rightButton");
 const forwardBtn = document.getElementById("runButton");
 const backBtn = document.getElementById("backButton");
+const dodgeBtn = document.getElementById("dodgeButton");
 
 // ===== Three.js セットアップ =====
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -549,7 +557,93 @@ function buildStage(stage) {
     group.add(poster);
   }
 
+  addStationDecor(group, stage, path, accentColor);
+
   return group;
+}
+
+function addStationDecor(group, stage, path, accentColor) {
+  const pathKeys = new Set(path.map((c) => cellKey(c.x, c.z)));
+  const startKey = cellKey(stage.start.x, stage.start.z);
+  const goalKey = cellKey(stage.goal.x, stage.goal.z);
+  const sideCells = stage.open.filter((c) => {
+    const key = cellKey(c.x, c.z);
+    if (pathKeys.has(key) || key === startKey || key === goalKey) return false;
+    return (c.x * 19 + c.z * 13 + stage.index * 7) % 5 === 0;
+  });
+
+  const floorAccentMat = new THREE.MeshStandardMaterial({
+    color: accentColor.clone().lerp(new THREE.Color(0xffffff), 0.38),
+    roughness: 0.72,
+    emissive: accentColor,
+    emissiveIntensity: 0.08,
+  });
+  const floorAccentGeo = new THREE.BoxGeometry(CELL * 0.72, 0.035, CELL * 0.72);
+  sideCells.slice(0, 9 + stage.index).forEach((c) => {
+    const marker = new THREE.Mesh(floorAccentGeo, floorAccentMat);
+    marker.position.set(c.x * CELL + CELL / 2, 0.035, c.z * CELL + CELL / 2);
+    marker.receiveShadow = true;
+    group.add(marker);
+  });
+
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff2b4 });
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x1d2b39, roughness: 0.55, metalness: 0.25 });
+  const lampGeo = new THREE.BoxGeometry(CELL * 0.9, 0.055, 0.16);
+  const beamGeo = new THREE.BoxGeometry(CELL * 0.08, 0.08, CELL * 0.94);
+  for (let i = 2; i < path.length - 1; i += 4) {
+    const c = path[i];
+    const next = path[i + 1] || c;
+    const prev = path[i - 1] || c;
+    const alongZ = Math.abs(next.z - prev.z) > Math.abs(next.x - prev.x);
+    const lamp = new THREE.Mesh(lampGeo, lampMat);
+    lamp.position.set(c.x * CELL + CELL / 2, WALL_H + 0.42, c.z * CELL + CELL / 2);
+    if (alongZ) lamp.rotation.y = Math.PI / 2;
+    group.add(lamp);
+
+    const beam = new THREE.Mesh(beamGeo, railMat);
+    beam.position.set(c.x * CELL + CELL / 2, WALL_H + 0.34, c.z * CELL + CELL / 2);
+    if (!alongZ) beam.rotation.y = Math.PI / 2;
+    group.add(beam);
+  }
+
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: accentColor.clone().lerp(new THREE.Color(0x111821), 0.28),
+    roughness: 0.6,
+    metalness: 0.08,
+  });
+  const columnMat = new THREE.MeshStandardMaterial({ color: 0xb9c2ca, roughness: 0.55, metalness: 0.18 });
+  const panelGeo = new THREE.BoxGeometry(CELL * 0.72, 0.42, 0.055);
+  const columnGeo = new THREE.CylinderGeometry(0.12, 0.12, WALL_H + 0.35, 14);
+  let panelCount = 0;
+  for (let z = 1; z < stage.height - 1; z++) {
+    for (let x = 1; x < stage.width - 1; x++) {
+      if (stage.map[z][x] !== "#") continue;
+      const openNorth = !isWall(stage, x, z - 1);
+      const openSouth = !isWall(stage, x, z + 1);
+      const openEast = !isWall(stage, x + 1, z);
+      const openWest = !isWall(stage, x - 1, z);
+      if ((x * 11 + z * 17 + stage.index) % 9 === 0 && (openNorth || openSouth || openEast || openWest)) {
+        const col = new THREE.Mesh(columnGeo, columnMat);
+        col.position.set(x * CELL + CELL / 2, (WALL_H + 0.35) / 2, z * CELL + CELL / 2);
+        col.castShadow = true;
+        group.add(col);
+      }
+      if (panelCount >= 8 + stage.index * 2) continue;
+      if ((x * 7 + z * 5 + stage.index) % 8 !== 0) continue;
+      const panel = new THREE.Mesh(panelGeo, panelMat);
+      if (openNorth || openSouth) {
+        panel.position.set(x * CELL + CELL / 2, 1.08, z * CELL + (openNorth ? 0.05 : CELL - 0.05));
+      } else if (openEast || openWest) {
+        panel.rotation.y = Math.PI / 2;
+        panel.position.set(x * CELL + (openWest ? 0.05 : CELL - 0.05), 1.08, z * CELL + CELL / 2);
+      } else {
+        continue;
+      }
+      panel.castShadow = true;
+      group.add(panel);
+      panelCount += 1;
+    }
+  }
 }
 
 // ===== キャラ表示ヘルパー =====
@@ -584,6 +678,24 @@ function setupCharacter(glbScene, targetHeight = PLAYER_H) {
   return root;
 }
 
+function addEnemyWarningRing(obj) {
+  const warn = new THREE.Mesh(
+    new THREE.RingGeometry(0.42, 0.62, 28),
+    new THREE.MeshBasicMaterial({
+      color: 0xff3b2f,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  warn.rotation.x = -Math.PI / 2;
+  warn.position.y = 0.035;
+  warn.visible = false;
+  obj.add(warn);
+  obj.userData.warn = warn;
+}
+
 // ===== ゲームステート =====
 const state = {
   mode: "title",
@@ -602,7 +714,7 @@ const state = {
   stageObj: null,
   playerObj: null,
   enemyObjs: [],
-  keys: { left: false, right: false, forward: false, back: false },
+  keys: { left: false, right: false, forward: false, back: false, dodge: false },
   inputCooldown: 0,
   queuedAction: null,
   hitTimer: 0,
@@ -610,6 +722,13 @@ const state = {
   blockedDuration: 0,
   blockedDx: 0,
   blockedDz: 0,
+  dodgeTime: 0,
+  dodgeDuration: 0,
+  dodgeCooldown: 0,
+  dodgeDir: 1,
+  dodgeId: 0,
+  dodgeSuccessTimer: 0,
+  messageTimer: 0,
   paused: false,
 };
 
@@ -642,6 +761,7 @@ const ACTION_BUTTONS = {
   right: turnRightBtn,
   forward: forwardBtn,
   back: backBtn,
+  dodge: dodgeBtn,
 };
 
 function resetInputState() {
@@ -649,9 +769,10 @@ function resetInputState() {
   state.keys.right = false;
   state.keys.forward = false;
   state.keys.back = false;
+  state.keys.dodge = false;
   state.inputCooldown = 0;
   state.queuedAction = null;
-  Object.values(ACTION_BUTTONS).forEach((btn) => btn?.classList.remove("is-held"));
+  Object.values(ACTION_BUTTONS).forEach((btn) => btn?.classList.remove("is-held", "is-active", "is-cooldown"));
 }
 
 // ===== ステージ開始 =====
@@ -677,10 +798,26 @@ function startStage(index) {
     const startDist = Math.abs(c.x - stage.start.x) + Math.abs(c.z - stage.start.z);
     return startDist >= 4;
   });
+  const routeCells = guidancePath(stage).filter((c) => {
+    const startDist = Math.abs(c.x - stage.start.x) + Math.abs(c.z - stage.start.z);
+    const goalDist = Math.abs(c.x - stage.goal.x) + Math.abs(c.z - stage.goal.z);
+    return startDist >= 4 && goalDist >= 2;
+  });
+  const usedEnemyCells = new Set();
   for (let i = 0; i < stage.enemyCount; i++) {
     const typeKey = stage.pool[i % stage.pool.length];
     const def = ENEMY_DEFS[typeKey];
-    const cell = stageOpen[(i * 7 + 3) % Math.max(stageOpen.length, 1)] || stage.open[0];
+    const preferRoute = routeCells.length > 0 && i < Math.ceil(stage.enemyCount * 0.55);
+    const source = preferRoute ? routeCells : stageOpen;
+    let cell = source[(i * 5 + stage.index * 3 + 4) % Math.max(source.length, 1)] || stage.open[0];
+    for (let retry = 0; retry < source.length; retry++) {
+      const candidate = source[(i * 5 + stage.index * 3 + 4 + retry * 3) % source.length];
+      if (!usedEnemyCells.has(cellKey(candidate.x, candidate.z))) {
+        cell = candidate;
+        break;
+      }
+    }
+    usedEnemyCells.add(cellKey(cell.x, cell.z));
     const behavior = stage.behaviors[i % stage.behaviors.length];
     const startDirs = DIRS.filter((d) => !isWall(stage, cell.x + d.dx, cell.z + d.dz));
     const startDir = startDirs.length > 0
@@ -698,6 +835,7 @@ function startStage(index) {
     };
     state.enemies.push(enemy);
     const obj = setupCharacter(assets.charGLBs[typeKey] || assets.charGLBs.business, 1.20);
+    addEnemyWarningRing(obj);
     const wp = gridToWorld(enemy.x - 0.5, enemy.z - 0.5);
     obj.position.copy(wp);
     obj.rotation.y = enemy.yaw;
@@ -729,6 +867,13 @@ function startStage(index) {
   state.blockedDuration = 0;
   state.blockedDx = 0;
   state.blockedDz = 0;
+  state.dodgeTime = 0;
+  state.dodgeDuration = 0;
+  state.dodgeCooldown = 0;
+  state.dodgeDir = 1;
+  state.dodgeId = 0;
+  state.dodgeSuccessTimer = 0;
+  state.messageTimer = 0;
   state.paused = false;
   resetInputState();
 
@@ -749,6 +894,10 @@ function isPlayerBusy() { return state.player.moveDuration > 0 || state.player.t
 
 function tryAction(action, opts = {}) {
   if (state.mode !== "playing" || state.paused) return;
+  if (action === "dodge") {
+    startDodge();
+    return;
+  }
   if (opts.repeat && state.inputCooldown > 0) return;
   if (isPlayerBusy()) {
     if (!opts.repeat) state.queuedAction = action;
@@ -794,6 +943,55 @@ function startStep(forward) {
   if (boardStatus) boardStatus.textContent = `STAGE ${state.stageIndex + 1} 進行中`;
 }
 
+function startDodge() {
+  if (state.dodgeCooldown > 0 || state.dodgeDuration > 0) {
+    if (boardStatus && state.messageTimer <= 0) boardStatus.textContent = "回避はまだ使えない";
+    state.messageTimer = Math.max(state.messageTimer, 0.35);
+    return;
+  }
+  state.dodgeTime = 0;
+  state.dodgeDuration = DODGE_DURATION;
+  state.dodgeCooldown = DODGE_COOLDOWN;
+  state.dodgeDir = chooseDodgeSide();
+  state.dodgeId += 1;
+  state.dodgeSuccessTimer = 0;
+  state.messageTimer = 0.45;
+  if (boardStatus) boardStatus.textContent = "回避！";
+}
+
+function chooseDodgeSide() {
+  const stage = STAGES[state.stageIndex];
+  const p = state.player;
+  const facing = DIRS[p.dirIndex];
+  const right = { dx: -facing.dz, dz: facing.dx };
+  const cx = Math.round(p.x - 0.5);
+  const cz = Math.round(p.z - 0.5);
+  const rightOpen = !isWall(stage, cx + right.dx, cz + right.dz);
+  const leftOpen = !isWall(stage, cx - right.dx, cz - right.dz);
+  if (rightOpen && !leftOpen) return 1;
+  if (leftOpen && !rightOpen) return -1;
+  return state.dodgeDir === 1 ? -1 : 1;
+}
+
+function isDodgeWindowActive() {
+  return state.dodgeDuration > 0 &&
+    state.dodgeTime >= DODGE_STARTUP &&
+    state.dodgeTime <= DODGE_STARTUP + DODGE_WINDOW;
+}
+
+function dodgeOffsetCells() {
+  if (state.dodgeDuration <= 0) return { x: 0, z: 0, phase: 0 };
+  const p = state.player;
+  const t = Math.min(state.dodgeTime / DODGE_DURATION, 1);
+  const phase = Math.sin(t * Math.PI);
+  const ax = Math.sin(p.angle);
+  const az = Math.cos(p.angle);
+  const rightX = -az;
+  const rightZ = ax;
+  const amount = DODGE_CELL_OFFSET * phase * state.dodgeDir;
+  return { x: rightX * amount, z: rightZ * amount, phase };
+}
+
 function consumeQueuedAction() {
   if (!state.queuedAction || isPlayerBusy() || state.mode !== "playing") return;
   const a = state.queuedAction;
@@ -825,6 +1023,9 @@ function tick(now) {
     updateHeldInput();
     if (state.inputCooldown > 0) state.inputCooldown -= dt;
     if (state.hitTimer > 0) state.hitTimer -= dt;
+    if (state.dodgeCooldown > 0) state.dodgeCooldown = Math.max(0, state.dodgeCooldown - dt);
+    if (state.dodgeSuccessTimer > 0) state.dodgeSuccessTimer = Math.max(0, state.dodgeSuccessTimer - dt);
+    if (state.messageTimer > 0) state.messageTimer = Math.max(0, state.messageTimer - dt);
   }
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -850,8 +1051,16 @@ function updatePlayer(dt) {
     p.z = p.fromZ + (p.targetZ - p.fromZ) * e;
     if (t >= 1) { p.x = p.targetX; p.z = p.targetZ; p.moveDuration = 0; }
   }
+  if (state.dodgeDuration > 0) {
+    state.dodgeTime += dt;
+    if (state.dodgeTime >= state.dodgeDuration) {
+      state.dodgeDuration = 0;
+      state.dodgeTime = 0;
+    }
+  }
   if (state.playerObj) {
     const wp = gridToWorld(p.x - 0.5, p.z - 0.5);
+    const dodge = dodgeOffsetCells();
     let blockX = 0;
     let blockZ = 0;
     if (state.blockedDuration > 0) {
@@ -862,20 +1071,22 @@ function updatePlayer(dt) {
       blockZ = state.blockedDz * bump;
       if (t >= 1) state.blockedDuration = 0;
     }
-    state.playerObj.position.x = wp.x + blockX;
-    state.playerObj.position.z = wp.z + blockZ;
+    state.playerObj.position.x = wp.x + blockX + dodge.x * CELL;
+    state.playerObj.position.z = wp.z + blockZ + dodge.z * CELL;
     // 接地ベース + 走り中バウンス
     let bobY = 0;
     if (p.moveDuration > 0) {
       const t = p.moveTime / p.moveDuration;
       bobY = Math.abs(Math.sin(t * Math.PI * 2)) * 0.08;
     }
-    state.playerObj.position.y = bobY;
+    state.playerObj.position.y = bobY + dodge.phase * 0.06;
     state.playerObj.rotation.y = p.angle;
+    state.playerObj.rotation.z = -state.dodgeDir * dodge.phase * 0.12;
     // hit中シェイク
     if (state.hitTimer > 0) {
       state.playerObj.position.x += Math.sin(performance.now() / 25) * 0.05 * state.hitTimer;
     }
+    if (state.dodgeDuration <= 0) state.playerObj.rotation.z = 0;
   }
 }
 
@@ -883,7 +1094,12 @@ function updateEnemies(dt) {
   const stage = STAGES[state.stageIndex];
   state.enemies.forEach((e, idx) => {
     e.turnTimer -= dt;
-    if (e.turnTimer <= 0) {
+    const approach = approachDirectionToPlayer(stage, e);
+    if (approach && e.turnTimer <= 0 && (e.behavior === "sprinter" || e.behavior === "ambush" || e.behavior === "zigzag")) {
+      e.dx = approach.dx;
+      e.dz = approach.dz;
+      e.turnTimer = Math.max(e.turnTimer, 0.3);
+    } else if (e.turnTimer <= 0) {
       const choices = [];
       for (const d of DIRS) {
         const nx = Math.round(e.x - 0.5) + d.dx;
@@ -943,8 +1159,46 @@ function updateEnemies(dt) {
                   Math.abs(Math.sin(performance.now() / 200 + idx)) * 0.05;
       obj.position.y = bob;
       obj.rotation.y = e.yaw;
+      if (obj.userData.warn) {
+        const dxp = e.x - state.player.x;
+        const dzp = e.z - state.player.z;
+        const near = dxp * dxp + dzp * dzp < 3.2;
+        obj.userData.warn.visible = near;
+        obj.userData.warn.material.opacity = isDodgeWindowActive() ? 0.18 : 0.5 + Math.sin(performance.now() / 80) * 0.18;
+      }
     }
   });
+}
+
+function approachDirectionToPlayer(stage, enemy) {
+  const ex = Math.round(enemy.x - 0.5);
+  const ez = Math.round(enemy.z - 0.5);
+  const px = Math.round(state.player.x - 0.5);
+  const pz = Math.round(state.player.z - 0.5);
+  const dx = px - ex;
+  const dz = pz - ez;
+  const distance = Math.abs(dx) + Math.abs(dz);
+  if (distance < 2 || distance > 6) return null;
+  if (ez === pz && hasClearLine(stage, ex, ez, px, pz)) {
+    return { dx: Math.sign(dx), dz: 0 };
+  }
+  if (ex === px && hasClearLine(stage, ex, ez, px, pz)) {
+    return { dx: 0, dz: Math.sign(dz) };
+  }
+  return null;
+}
+
+function hasClearLine(stage, ax, az, bx, bz) {
+  const sx = Math.sign(bx - ax);
+  const sz = Math.sign(bz - az);
+  let x = ax + sx;
+  let z = az + sz;
+  while (x !== bx || z !== bz) {
+    if (isWall(stage, x, z)) return false;
+    x += sx;
+    z += sz;
+  }
+  return true;
 }
 
 function updateCamera(snap = false) {
@@ -1006,18 +1260,33 @@ function updateHUD() {
     else if (state.dignity < 60) src = "./assets/sprites/face-panic.png";
     if (!facePortrait.src.endsWith(src.split("/").pop())) facePortrait.src = src;
   }
+  if (dodgeBtn) {
+    const cooling = state.dodgeCooldown > 0 && state.dodgeDuration <= 0;
+    const pct = cooling ? `${(1 - state.dodgeCooldown / DODGE_COOLDOWN) * 100}%` : "0%";
+    dodgeBtn.style.setProperty("--cooldown", pct);
+    dodgeBtn.classList.toggle("is-active", isDodgeWindowActive());
+    dodgeBtn.classList.toggle("is-cooldown", cooling);
+  }
 }
 
 function checkCollisions() {
   if (state.hitTimer > 0) return;
   const stage = STAGES[state.stageIndex];
-  const px = state.player.x, pz = state.player.z;
+  const offset = dodgeOffsetCells();
+  const px = state.player.x + offset.x;
+  const pz = state.player.z + offset.z;
   for (const e of state.enemies) {
     const d2 = (e.x - px) ** 2 + (e.z - pz) ** 2;
     const r = e.def.hitRadius + 0.18;
+    if (isDodgeWindowActive() && d2 < DODGE_SUCCESS_RADIUS * DODGE_SUCCESS_RADIUS) {
+      registerDodgeSuccess(e);
+      continue;
+    }
     if (d2 < r * r) {
       state.dignity -= stage.hitPenalty;
       state.hitTimer = 0.6;
+      state.messageTimer = 0.6;
+      if (boardStatus) boardStatus.textContent = `接触！ 我慢 -${stage.hitPenalty}`;
       if (state.dignity <= 0) {
         state.dignity = 0;
         gameOver();
@@ -1025,6 +1294,18 @@ function checkCollisions() {
       break;
     }
   }
+}
+
+function registerDodgeSuccess(enemy) {
+  if (enemy.lastDodgedId === state.dodgeId) return;
+  enemy.lastDodgedId = state.dodgeId;
+  enemy.dx *= -1;
+  enemy.dz *= -1;
+  enemy.turnTimer = Math.max(enemy.turnTimer, 0.55);
+  state.dignity = Math.min(100, state.dignity + DODGE_REWARD);
+  state.dodgeSuccessTimer = 0.7;
+  state.messageTimer = 0.75;
+  if (boardStatus) boardStatus.textContent = "回避成功！";
 }
 
 function checkGoal() {
@@ -1103,18 +1384,19 @@ function showTitle() {
 const KEY_MAP = {
   ArrowLeft: "left", ArrowRight: "right", ArrowUp: "forward", ArrowDown: "back",
   KeyA: "left", KeyD: "right", KeyW: "forward", KeyS: "back",
+  Space: "dodge", ShiftLeft: "dodge", ShiftRight: "dodge",
 };
 window.addEventListener("keydown", (ev) => {
   const k = KEY_MAP[ev.code];
   if (k) {
-    if ((k === "left" || k === "right") && ev.repeat) {
+    if ((k === "left" || k === "right" || k === "dodge") && ev.repeat) {
       ev.preventDefault();
       return;
     }
     setHeld(k, true);
     tryAction(k);
     ev.preventDefault();
-  } else if (ev.code === "Space" && state.mode === "playing") {
+  } else if ((ev.code === "KeyP" || ev.code === "Escape") && state.mode === "playing") {
     state.paused = !state.paused;
   } else if (ev.code === "KeyR" && state.mode !== "title") {
     startStage(state.stageIndex);
@@ -1141,6 +1423,7 @@ bindButton(turnLeftBtn, "left");
 bindButton(turnRightBtn, "right");
 bindButton(forwardBtn, "forward");
 bindButton(backBtn, "back");
+bindButton(dodgeBtn, "dodge");
 
 if (pauseButton) {
   pauseButton.addEventListener("click", () => {
