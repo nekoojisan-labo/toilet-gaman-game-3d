@@ -420,7 +420,7 @@ button {
   grid-template-columns: repeat(3, 44px);
   grid-template-areas:
     "left forward right"
-    ". back .";
+    "back dodge dodge";
   gap: 6px;
   justify-content: end;
   padding: 0 10px 8px;
@@ -466,6 +466,28 @@ button {
   grid-area: back;
   background: rgba(255, 255, 255, 0.82);
   color: #111821;
+}
+
+#dodgeButton {
+  grid-area: dodge;
+  width: 94px;
+  background:
+    linear-gradient(90deg, rgba(8, 20, 34, 0.18) var(--cooldown, 0%), transparent var(--cooldown, 0%)),
+    rgba(47, 140, 103, 0.94);
+  color: #fff;
+  font-size: 18px;
+}
+
+#dodgeButton.is-active {
+  background: rgba(68, 221, 255, 0.95);
+  color: #08202b;
+}
+
+#dodgeButton.is-cooldown {
+  background:
+    linear-gradient(90deg, rgba(8, 20, 34, 0.48) var(--cooldown, 0%), transparent var(--cooldown, 0%)),
+    rgba(91, 105, 116, 0.82);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .stage-board {
@@ -686,6 +708,10 @@ button {
   #runButton {
     width: 48px;
     font-size: 22px;
+  }
+
+  #dodgeButton {
+    width: 103px;
   }
 }
 
