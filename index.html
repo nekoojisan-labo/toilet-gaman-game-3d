@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>トイレ我慢ゲーム 3D</title>
-    <link rel="stylesheet" href="./style.css">
+    <meta name="theme-color" content="#05090d">
+    <title>トイレ我慢ゲーム 3D 駅構内ラン</title>
+    <link rel="stylesheet" href="./style.css?v=20260710-full3d-r1">
     <script type="importmap">
       {
         "imports": {
@@ -13,62 +14,94 @@
         }
       }
     </script>
-    <script type="module" src="./game-3d.js?v=20260524-dodge-maze2"></script>
+    <script type="module" src="./game-3d.js?v=20260710-full3d-r1"></script>
   </head>
-  <body>
-    <main class="app" aria-label="トイレ我慢ゲーム">
-      <section class="cabinet" aria-label="ゲーム画面">
-        <canvas id="gameCanvas" width="760" height="430"></canvas>
+  <body data-mode="title">
+    <main class="game-shell" aria-label="トイレ我慢ゲーム">
+      <section class="game-viewport" aria-label="ゲーム画面">
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <div class="scene-shade" aria-hidden="true"></div>
 
-        <header class="hud" aria-label="ステータス">
-          <div class="stage-chip">
-            <span id="stageNo">STAGE 1</span>
-            <strong id="stageName">ホーム迷宮</strong>
+        <div class="impact-layer" id="impactLayer" aria-hidden="true">
+          <b id="impactTitle">IMPACT</b>
+          <span id="impactDetail">我慢 -0</span>
+        </div>
+
+        <header class="hud" aria-label="ゲーム状況">
+          <div class="mission-panel">
+            <div class="mission-meta">
+              <span id="stageNo">STAGE 1</span>
+              <span id="boardStatus">HOME ROUTE</span>
+            </div>
+            <strong id="stageName">深夜ホーム</strong>
           </div>
+
           <div class="timer" id="timerBox" aria-live="polite">
             <span>LIMIT</span>
             <strong id="timeValue">40.0</strong>
           </div>
-          <div class="meter-block">
-            <span>我慢</span>
-            <div class="meter"><i id="dignityFill"></i></div>
+
+          <div class="condition-panel">
+            <div class="condition-meter">
+              <div class="condition-label">
+                <span>PRESSURE</span>
+                <strong id="dignityValue">100%</strong>
+              </div>
+              <div class="meter"><i id="dignityFill"></i></div>
+            </div>
+            <img class="face" id="facePortrait" src="./assets/sprites/face-normal.png" alt="主人公の表情">
+            <button class="icon-button" id="pauseButton" type="button" aria-label="一時停止">Ⅱ</button>
           </div>
-          <div class="meter-block distance">
-            <span>到達</span>
-            <div class="meter"><i id="distanceFill"></i></div>
-          </div>
-          <img class="face" id="facePortrait" src="./assets/sprites/face-normal.png" alt="主人公の表情">
-          <button class="icon-button" id="pauseButton" type="button" aria-label="一時停止">II</button>
         </header>
+
+        <div class="route-hud" aria-label="トイレまでの進行状況">
+          <span>現在地</span>
+          <div class="route-track"><i id="distanceFill"></i></div>
+          <strong id="distanceValue">トイレまで 100%</strong>
+        </div>
 
         <div class="screen-layer active" id="screenLayer" data-screen="title" aria-hidden="false">
           <div class="title-panel">
-            <p class="kicker">満員電車後の尊厳防衛戦</p>
-            <h1>トイレ我慢ゲーム</h1>
-            <p class="screen-copy" id="screenCopy">TPS視点で駅構内の迷路を走り、トイレドアへ触れろ。</p>
+            <div class="screen-main">
+              <p class="kicker">DIGNITY ESCAPE MISSION</p>
+              <h1>TOILET<span>我慢ゲーム</span></h1>
+              <p class="screen-copy" id="screenCopy">人波を読み、限界までに扉へ辿り着け。ホームからトイレ前まで、5つの駅区画を走り抜ける尊厳防衛タイムアタック。</p>
+              <div class="screen-actions" id="screenActions">
+                <button class="primary" type="button" data-action="start">STAGE 01 を開始</button>
+              </div>
+            </div>
+
             <div class="result-scene" id="resultScene" hidden></div>
-            <div class="screen-actions" id="screenActions">
-              <button class="primary" type="button" data-action="start">START</button>
+
+            <section class="stage-select" id="stageSelect" aria-label="ステージ選択">
+              <div class="stage-select-heading">
+                <span>STATION RUN</span>
+                <strong>5 STAGES</strong>
+              </div>
+              <ol id="stageList"></ol>
+            </section>
+          </div>
+        </div>
+
+        <div class="pause-layer" id="pauseLayer" hidden aria-hidden="true">
+          <div class="pause-panel">
+            <p>RUN SUSPENDED</p>
+            <h2>PAUSE<span>一時停止</span></h2>
+            <div class="pause-actions">
+              <button class="primary" type="button" data-pause-action="resume">RESUME</button>
+              <button type="button" data-pause-action="retry">RETRY</button>
+              <button type="button" data-pause-action="title">STAGE SELECT</button>
             </div>
           </div>
         </div>
 
         <nav class="touch-controls" aria-label="移動操作">
-          <button id="leftButton" type="button" aria-label="左へ旋回" title="左へ旋回">↶</button>
-          <button id="runButton" type="button" aria-label="前進" title="前進">↑</button>
-          <button id="rightButton" type="button" aria-label="右へ旋回" title="右へ旋回">↷</button>
-          <button id="backButton" type="button" aria-label="後退" title="後退">↓</button>
-          <button id="dodgeButton" type="button" aria-label="回避" title="回避">避</button>
+          <div class="mobile-stick" id="mobileStick" aria-label="移動スティック">
+            <i id="stickKnob"></i>
+          </div>
+          <button id="dodgeButton" class="dodge" type="button" aria-label="回避" title="回避">回避</button>
         </nav>
       </section>
-
-      <aside class="stage-board" aria-label="ステージ一覧">
-        <div class="board-title">
-          <span>駅構内 5 STAGES</span>
-          <strong id="boardStatus">尊厳防衛中</strong>
-        </div>
-        <ol id="stageList"></ol>
-      </aside>
     </main>
   </body>
 </html>
