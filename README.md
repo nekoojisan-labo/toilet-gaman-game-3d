@@ -1,6 +1,6 @@
 # トイレ我慢ゲーム
 
-満員電車を降りたサラリーマンが、限界寸前の状態で駅構内の迷路を走り、制限時間内にトイレへ到達するブラウザゲームです。
+満員電車を降りたサラリーマンが、限界寸前の状態で5つの駅区画を走り、制限時間内にトイレへ到達する完全3Dブラウザゲームです。
 
 ## 公開URL
 
@@ -8,44 +8,47 @@ https://nekoojisan-labo.github.io/toilet-gaman-game-3d/
 
 ## 実行
 
-`index.html` の直開きで動きます。
-
-```text
-/Users/takayamanoboruhaku/Documents/gazoubiruda/toilet-gaman-game/index.html
-```
-
-簡易サーバーで確認する場合:
+ES moduleを使っているため、簡易サーバーで確認します。
 
 ```sh
 python3 -m http.server 8031
 ```
 
 ```text
-http://localhost:8031/toilet-gaman-game/
+http://localhost:8031/
 ```
 
 ## 操作
 
-- PC: `W` / `ArrowUp` / `Space` で前に1マス進む、`S` / `ArrowDown` で後ろに1マス戻る、`A` / `ArrowLeft` と `D` / `ArrowRight` で90度旋回
-- ダッシュ補助: `Shift` を押しながら前進
-- スマホ: 画面右下の `↶` `↑` `↷` `↓` ボタンで、90度旋回と1マス移動を行う
+- PC: `WASD` / 矢印キーでカメラ基準の連続移動
+- カメラ: 画面ドラッグで旋回、ホイールで距離調整、`C`で背後へ戻す
+- 回避: `Space` / `Shift`、または画面右下の「回避」
+- スマホ: 左下の仮想スティックで移動、右側のスワイプでカメラ旋回、右下の「回避」で回避
 - 一時停止: 画面右上ボタン、`P`、`Esc`
+- タブを離れた場合は自動で一時停止
 
 ## 実装範囲
 
-- TPS風の後方カメラ表示
-- TPSカメラ用の後方余白を持たせた駅構内5ステージ
+- 主人公と通行人4種を共通Humanoidリグの`THREE.SkinnedMesh`で描画
+- `AnimationMixer`による待機、歩行、走行、回避、接触、限界モーションの切替
+- 実際の移動ベクトルへ身体正面を合わせる主人公・通行人の滑らかな旋回
+- カメラ基準の連続移動と、弱い自動センタリングのTPSカメラ
+- ホーム、改札、乗換通路、巨大ターミナル、トイレ前サービス区画の5ステージ
+- 車両、改札機、券売機、階段、ロッカー、発車標、店舗、工事柵、清掃カートなどの区画別3D設備
+- カメラと主人公の間に入る設備の透過処理
 - 制限時間、我慢ゲージ、トイレまでの到達ゲージ
-- 主人公の地図座標に連動した表示、前進、後退、90度旋回、壁前停止
+- 全画面の駅管制HUD、ステージ選択、一時停止、クリア・失敗リザルト
+- STAGE 1から順番に解放する進行システム
+- ブラウザ内に各ステージの最高ランクとベスト残り時間を保存
+- 円形コライダーによる壁沿い移動と、非表示ナビゲーショングリッドによる通行人経路
 - 残り時間と我慢ゲージに応じた表情変化
-- 主人公の4方向スプライト枠と敵キャラの3フレーム以上の走行アニメーション
 - 敵キャラのステージ別挙動
   - ステージ1: 素直な巡回
   - ステージ2: ジグザグ移動
   - ステージ3: キャリーケース系の幅広ブロック
   - ステージ4: 視界に入ると突っ込むビジネスマン
   - ステージ5: フェイント、追跡、ブロックの混合
-- 敵接触時の減速、時間ロス、我慢ゲージ減少
+- 敵接触時の画面フラッシュ、3D衝突リング、我慢ゲージ減少
 - トイレドア接触によるステージクリア
 - クリア表示: `尊厳は守られた`
 - ゲームオーバー表示: `社会的な「死」`
@@ -53,7 +56,9 @@ http://localhost:8031/toilet-gaman-game/
 
 ## 素材
 
-支給画像と生成画像は `assets/source/`、ゲームで使う透過PNGは `assets/sprites/` に保管しています。
+UI用画像は`assets/sprites/`、駅用テクスチャは`assets-3d/textures/`、本番の共通リグとアニメーションは`assets-3d/rigged/`に保管しています。
+
+3Dアセットの出典とライセンスは`assets-3d/LICENSES.md`を参照してください。
 
 Blender / Claude で3D版を作り直すための引き継ぎ資料は `docs/blender-claude-handoff/` にまとめています。
 
@@ -62,15 +67,4 @@ Blender / Claude で3D版を作り直すための引き継ぎ資料は `docs/ble
 - `assets/station-concourse-v2.png`
 - `assets/effects/gameover-accident.png`
 
-主人公・敵キャラのスプライト再生成:
-
-```sh
-python3 toilet-gaman-game/tools/extract-assets.py
-```
-
-主人公の4方向走行スプライトは `assets/source/player-4dir-generated-sheet.png` を元に、`tools/generate_player_4dir_sprites.py` でアニメ調の透過PNGへ切り出します。
-走行は前・後・左・右の4方向、それぞれ3フレーム構成です。
-
-```sh
-python3 toilet-gaman-game/tools/generate_player_4dir_sprites.py
-```
+`assets/source/`と旧スプライト生成ツールは制作履歴として残していますが、ゲーム中のキャラクター描画には使用しません。
