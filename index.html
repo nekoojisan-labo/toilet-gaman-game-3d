@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#05090d">
     <title>トイレ我慢ゲーム 3D 駅構内ラン</title>
-    <link rel="stylesheet" href="./style.css?v=20260710-full3d-r1">
+    <link rel="stylesheet" href="./style.css?v=20260711-kaizen-r1">
     <script type="importmap">
       {
         "imports": {
@@ -14,7 +14,7 @@
         }
       }
     </script>
-    <script type="module" src="./game-3d.js?v=20260710-full3d-r1"></script>
+    <script type="module" src="./game-3d.js?v=20260711-kaizen-r1"></script>
   </head>
   <body data-mode="title">
     <main class="game-shell" aria-label="トイレ我慢ゲーム">
@@ -54,18 +54,19 @@
           </div>
         </header>
 
-        <div class="route-hud" aria-label="トイレまでの進行状況">
-          <span>現在地</span>
+        <div class="route-hud" aria-label="トイレ探索の進行状況">
+          <span>探索</span>
           <div class="route-track"><i id="distanceFill"></i></div>
-          <strong id="distanceValue">トイレまで 100%</strong>
+          <strong id="distanceValue">トイレ ？？？（案内板を探せ）</strong>
         </div>
 
         <div class="screen-layer active" id="screenLayer" data-screen="title" aria-hidden="false">
+          <div class="title-art" aria-hidden="true"></div>
           <div class="title-panel">
             <div class="screen-main">
               <p class="kicker">DIGNITY ESCAPE MISSION</p>
               <h1>TOILET<span>我慢ゲーム</span></h1>
-              <p class="screen-copy" id="screenCopy">人波を読み、限界までに扉へ辿り着け。ホームからトイレ前まで、5つの駅区画を走り抜ける尊厳防衛タイムアタック。</p>
+              <p class="screen-copy" id="screenCopy">トイレの場所は毎回変わる。案内板を読み、人波をかわし、限界までに扉を探し出せ。5つの駅迷宮を走り抜ける尊厳防衛アクション。</p>
               <div class="screen-actions" id="screenActions">
                 <button class="primary" type="button" data-action="start">STAGE 01 を開始</button>
               </div>

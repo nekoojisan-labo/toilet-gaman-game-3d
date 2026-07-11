@@ -59,9 +59,10 @@ const DIRS = [
 ];
 
 // ===== ステージデータ =====
+// 迷路探索型: G はフォールバック位置。実際のゴールは startStage が候補からランダムに選ぶ。
 const STAGES = [
   {
-    name: "深夜ホーム", note: "車両脇のロングホーム", zone: "platform", time: 44, drain: 0.58, hitPenalty: 12,
+    name: "深夜ホーム", note: "車両脇の入り組んだホーム", zone: "platform", time: 75, drain: 0.58, hitPenalty: 12,
     enemyCount: 7, enemySpeed: 0.92,
     behaviors: ["patrol", "patrol", "patrol"],
     pool: ["student", "ol", "business"],
@@ -69,24 +70,24 @@ const STAGES = [
     sky: 0x98c5cf, fog: 0x98c5cf, floorColor: 0x44545b, tileA: 0x94a8a2, tileB: 0x6f8582, wallTopColor: 0xd4dfcf,
     map: [
       "#########################",
-      "#...........G...........#",
-      "#.......................#",
-      "#..#....#.....#....#....#",
-      "#.......................#",
-      "#.......................#",
-      "#........####...........#",
-      "#.......................#",
-      "#.......................#",
-      "#....#.............#....#",
-      "#.......................#",
-      "#.......................#",
-      "#..#.................#..#",
-      "#...........S...........#",
+      "#..G#.............#.....#",
+      "#.#.#.#...#.###.#.#.#.#.#",
+      "#.#.#.#.....#...#...#.#.#",
+      "#.###.#.#...#.#.#####.#.#",
+      "#...#...#...#.#.#.....#.#",
+      "#.#.###.###.#.#.#.#####.#",
+      "#.#.........#.#.#...#...#",
+      "###########.#.#.###.#.###",
+      "#.....#...#.....#...#...#",
+      "#.###...#.#######.#####.#",
+      "#...#...#.......#...#...#",
+      "#.#.#.#.######..###.#.#.#",
+      "#...#.......S.......#...#",
       "#########################",
     ],
   },
   {
-    name: "中央改札コンコース", note: "改札レーンを横切る人波", zone: "gates", time: 47, drain: 0.66, hitPenalty: 13,
+    name: "中央改札コンコース", note: "改札レーンの入り組む人波", zone: "gates", time: 80, drain: 0.66, hitPenalty: 13,
     enemyCount: 9, enemySpeed: 0.98,
     behaviors: ["zigzag", "patrol", "zigzag"],
     pool: ["ol", "student", "traveler"],
@@ -94,24 +95,24 @@ const STAGES = [
     sky: 0x8fc2b3, fog: 0x8fc2b3, floorColor: 0x3f514a, tileA: 0x9bb59e, tileB: 0x6f8977, wallTopColor: 0xcce0c8,
     map: [
       "#########################",
-      "#...........G...........#",
-      "#.......................#",
-      "#..###....###....###....#",
-      "#.......................#",
-      "#.......................#",
-      "#.#.#.#.#.#.#.#.#.#.#.#.#",
-      "#.......................#",
-      "#.......................#",
-      "#....###.........###....#",
-      "#.......................#",
-      "#.......................#",
-      "#..#.....#.....#.....#..#",
-      "#...........S...........#",
+      "#.....#.....#.......#G..#",
+      "#.###....##.#.###.#.###.#",
+      "#.#.......#...#...#.....#",
+      "#.#####...#.###.#########",
+      "#.......#.#...#.#.......#",
+      "#####...#.#####.#.#####.#",
+      "#.....#.#.#...#...#.....#",
+      "#.#####.#.#.#.#####.###.#",
+      "#.#.....#.#.#.....#...#.#",
+      "#.#####.#.#.#...#.#.#.###",
+      "#.#.....#.#.#...#.#.#...#",
+      "#.#.#####.#.#####.#####.#",
+      "#.#.........S...........#",
       "#########################",
     ],
   },
   {
-    name: "地下乗換通路", note: "階段とエスカレーターの狭路", zone: "transfer", time: 51, drain: 0.76, hitPenalty: 15,
+    name: "地下乗換通路", note: "階段とエスカレーターの狭路", zone: "transfer", time: 85, drain: 0.76, hitPenalty: 15,
     enemyCount: 11, enemySpeed: 0.98,
     behaviors: ["blocker", "patrol", "zigzag"],
     pool: ["traveler", "traveler", "student", "business"],
@@ -119,24 +120,24 @@ const STAGES = [
     sky: 0xa7b1ad, fog: 0xa7b1ad, floorColor: 0x464d4b, tileA: 0xa7aea9, tileB: 0x747d78, wallTopColor: 0xd8dcd5,
     map: [
       "#########################",
-      "#...................G...#",
-      "#.......................#",
-      "#..#####........#####...#",
-      "#.......................#",
-      "#........###............#",
-      "#.......................#",
-      "#...###.........###.....#",
-      "#.......................#",
-      "#.......#####...........#",
-      "#.......................#",
-      "#..###.............###..#",
-      "#.......................#",
-      "#S......................#",
+      "#.......#.............#.#",
+      "#.#####.#.#####.#####.#.#",
+      "#.#...#.#.#...#.#.....#.#",
+      "#.#.###.#.#.#.#.###..##.#",
+      "#.#.....#.#.#.#...#.....#",
+      "#.###.#####.#.#.#.#..##.#",
+      "#...#.......#...#.....#.#",
+      "#.#.###...###.###.###.###",
+      "#.#.#.......#...#...#...#",
+      "#.#.#.#####.###.#######.#",
+      "#.#.#.....#.....#.....#.#",
+      "#.#.#...#.#######.###.#.#",
+      "#.G.#.......S.....#.....#",
       "#########################",
     ],
   },
   {
-    name: "巨大ターミナル", note: "発車標下の分岐ホール", zone: "terminal", time: 54, drain: 0.86, hitPenalty: 16,
+    name: "巨大ターミナル", note: "発車標下の分岐ホール", zone: "terminal", time: 90, drain: 0.86, hitPenalty: 16,
     enemyCount: 13, enemySpeed: 1.05,
     behaviors: ["sprinter", "patrol", "zigzag"],
     pool: ["business", "business", "ol", "traveler"],
@@ -144,24 +145,24 @@ const STAGES = [
     sky: 0x96a3aa, fog: 0x96a3aa, floorColor: 0x434b50, tileA: 0xa8afb2, tileB: 0x707b80, wallTopColor: 0xd7dcdd,
     map: [
       "#########################",
-      "#......................G#",
-      "#.......................#",
-      "#..###...###...###..###.#",
-      "#.......................#",
-      "#.......................#",
-      "#.....####.....####.....#",
-      "#.......................#",
-      "#.......................#",
-      "#..##...............##..#",
-      "#.......................#",
-      "#.......................#",
-      "#.....###.......###.....#",
-      "#...........S...........#",
+      "#.......#.......#...#...#",
+      "#.#.###.#.###.#.#.#.#.#.#",
+      "#.....#.#.#.#.#...#...#.#",
+      "#.###.#.#.#.#.######..#.#",
+      "#.......#...#...#.....#.#",
+      "#.#######...###.###...#.#",
+      "#...#...#.....#...#.#...#",
+      "#.#.#.#.#.#######.#.#.###",
+      "#.#.......#.....#.#.#.#G#",
+      "#####..####.###.#.#.#.#.#",
+      "#.........#...#...#.#.#.#",
+      "#.#######.###.#...#.#.#.#",
+      "#...........S.#...#.....#",
       "#########################",
     ],
   },
   {
-    name: "トイレ前サービス区画", note: "見える扉と工事中の迂回路", zone: "restroom", time: 60, drain: 0.98, hitPenalty: 18,
+    name: "トイレ前サービス区画", note: "扉はどこだ、最後の迷宮", zone: "restroom", time: 100, drain: 0.98, hitPenalty: 18,
     enemyCount: 16, enemySpeed: 1.12,
     behaviors: ["ambush", "sprinter", "zigzag", "blocker"],
     pool: ["business", "ol", "student", "traveler"],
@@ -169,19 +170,19 @@ const STAGES = [
     sky: 0x96a39f, fog: 0x96a39f, floorColor: 0x484d4a, tileA: 0xa7ada5, tileB: 0x747c76, wallTopColor: 0xd8dbd3,
     map: [
       "#########################",
-      "#...........G...........#",
-      "#....###.........###....#",
-      "#.......................#",
-      "#........##.##..........#",
-      "#.......................#",
-      "#...####.......####.....#",
-      "#.......................#",
-      "#........#####..........#",
-      "#.......................#",
-      "#..###.............###..#",
-      "#.......................#",
-      "#......###...###........#",
-      "#...........S...........#",
+      "#...............#.......#",
+      "#.###.###.#...###.#####.#",
+      "#.#...#...............#.#",
+      "#.#.#####.#.#########.#.#",
+      "#.#.#...#...........#.#.#",
+      "#.#.#.#.###########.#.#.#",
+      "#.#...#...#.....#...#.#.#",
+      "#.#######.#.#.#.#.###.#.#",
+      "#...#.....#.#.#...#...#.#",
+      "#####.#####.###.###...#.#",
+      "#G....#.#.....#.#.......#",
+      "#.#####.#.###.#.###.###.#",
+      "#.#.........S.......#...#",
       "#########################",
     ],
   },
@@ -361,6 +362,47 @@ function guidancePath(stage) {
   return shortestPath(stage);
 }
 
+// スタートからの全セルBFS距離
+function distanceField(stage, from = stage.start) {
+  const dist = new Map([[cellKey(from.x, from.z), 0]]);
+  const queue = [{ x: from.x, z: from.z }];
+  for (let i = 0; i < queue.length; i++) {
+    const cur = queue[i];
+    const d = dist.get(cellKey(cur.x, cur.z));
+    for (const dir of DIRS) {
+      const nx = cur.x + dir.dx, nz = cur.z + dir.dz;
+      const k = cellKey(nx, nz);
+      if (dist.has(k) || isWall(stage, nx, nz)) continue;
+      dist.set(k, d + 1);
+      queue.push({ x: nx, z: nz });
+    }
+  }
+  return dist;
+}
+
+// ゴール候補: 北側が壁（ドアを貼れる）かつスタートから十分遠いセル
+function goalCandidates(stage) {
+  const dist = distanceField(stage);
+  let maxDist = 0;
+  dist.forEach((d) => { if (d > maxDist) maxDist = d; });
+  const threshold = maxDist * 0.55;
+  const candidates = stage.open.filter((c) => {
+    if (c.x === stage.start.x && c.z === stage.start.z) return false;
+    if (!isWall(stage, c.x, c.z - 1)) return false;
+    const d = dist.get(cellKey(c.x, c.z));
+    return d !== undefined && d >= threshold;
+  });
+  return candidates.length > 0 ? candidates : [stage.goal];
+}
+
+// 毎ラン、ゴール（トイレの扉）の位置をランダムに決める＝探して見つけるゲームにする
+function pickStageGoal(stage) {
+  const candidates = goalCandidates(stage);
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)] || stage.goal;
+  stage.goal = { x: chosen.x, z: chosen.z };
+  return stage.goal;
+}
+
 // ===== DOM =====
 const canvas = document.getElementById("gameCanvas");
 const cabinet = document.querySelector(".game-viewport");
@@ -388,6 +430,7 @@ const pauseLayer = document.getElementById("pauseLayer");
 const stageSelect = document.getElementById("stageSelect");
 const stageList = document.getElementById("stageList");
 const boardStatus = document.getElementById("boardStatus");
+const routeHud = document.querySelector(".route-hud");
 const mobileStick = document.getElementById("mobileStick");
 const stickKnob = document.getElementById("stickKnob");
 const dodgeBtn = document.getElementById("dodgeButton");
@@ -724,34 +767,37 @@ function buildStage(stage) {
     group.add(tiles);
   });
 
-  // --- 黄色点字ブロック ---
-  // 最短経路にだけ敷く。迷路の緊張感は残しつつ、トイレ方向の手がかりにする。
+  // --- 黄色点字ブロック（装飾） ---
+  // ゴールへの誘導には使わない。長い直線通路にだけ敷き、駅の雰囲気を出す。
+  // ゴール探索は「案内板」と扉の目視で行う（探索ゲーム性の核）。
   const tactileMat = new THREE.MeshStandardMaterial({
     color: 0xf2c61f, roughness: 0.6, emissive: 0xb09010, emissiveIntensity: 0.18,
   });
   const path = guidancePath(stage);
   const tactileGeo = new THREE.BoxGeometry(CELL * 0.58, 0.06, CELL * 0.18);
-  const tactileDotGeo = new THREE.BoxGeometry(0.12, 0.08, 0.12);
-  for (let i = 0; i < path.length; i++) {
-    const cur = path[i];
-    const next = path[i + 1] || cur;
-    const prev = path[i - 1] || cur;
-    const dx = next.x - prev.x;
-    const dz = next.z - prev.z;
+  const paveCell = (x, z, alongZ) => {
     const block = new THREE.Mesh(tactileGeo, tactileMat);
-    block.position.set(cur.x * CELL + CELL / 2, 0.025, cur.z * CELL + CELL / 2);
-    if (Math.abs(dz) > Math.abs(dx)) block.rotation.y = Math.PI / 2;
+    block.position.set(x * CELL + CELL / 2, 0.025, z * CELL + CELL / 2);
+    if (alongZ) block.rotation.y = Math.PI / 2;
     block.receiveShadow = true;
     group.add(block);
-    for (let d = -1; d <= 1; d++) {
-      const offset = d * 0.18;
-      const dot = new THREE.Mesh(tactileDotGeo, tactileMat);
-      dot.position.set(
-        block.position.x + (Math.abs(dz) > Math.abs(dx) ? 0 : offset),
-        0.09,
-        block.position.z + (Math.abs(dz) > Math.abs(dx) ? offset : 0),
-      );
-      group.add(dot);
+  };
+  const openSet = new Set(stage.open.map((c) => cellKey(c.x, c.z)));
+  let paveCount = 0;
+  for (let z = 1; z < stage.height - 1 && paveCount < 40; z += 2) {
+    let run = [];
+    for (let x = 1; x < stage.width; x++) {
+      if (openSet.has(cellKey(x, z))) { run.push(x); continue; }
+      if (run.length >= 6) run.forEach((rx) => { paveCell(rx, z, false); paveCount += 1; });
+      run = [];
+    }
+  }
+  for (let x = 1; x < stage.width - 1 && paveCount < 56; x += 2) {
+    let run = [];
+    for (let z = 1; z < stage.height; z++) {
+      if (openSet.has(cellKey(x, z))) { run.push(z); continue; }
+      if (run.length >= 6) run.forEach((rz) => { paveCell(x, rz, true); paveCount += 1; });
+      run = [];
     }
   }
 
@@ -762,7 +808,10 @@ function buildStage(stage) {
     for (let x = 0; x < stage.width; x++) {
       if (stage.map[z][x] !== "#") continue;
       if (x === 0 || z === 0 || x === stage.width - 1 || z === stage.height - 1) continue;
-      if (addZoneObstacle(group, stage, x, z, accentColor)) continue;
+      // 迷路の壁は基本「壁」として建てる。設備（柱・改札・売店等）への変換は
+      // 隙間から見通せてしまうため、まばらに散らすだけにする。
+      const decorSlot = (x * 7 + z * 11 + stage.index * 5) % 19 === 0;
+      if (decorSlot && addZoneObstacle(group, stage, x, z, accentColor)) continue;
       const wallMat = new THREE.MeshStandardMaterial({
         color: wallColor, roughness: 0.68, metalness: 0.03,
         transparent: true, opacity: 0.98,
@@ -823,25 +872,67 @@ function buildStage(stage) {
     const glowGeo = new THREE.BoxGeometry(CELL * 0.72, 0.1, 0.2);
     addBox(group, glowGeo, voxelMat(VOXEL.glow, { emissive: VOXEL.glow, emissiveIntensity: 0.8 }), goalWp.x, 0.18, goalWp.z - CELL / 2 + 0.14);
   }
-  // ドア上の Restroom 看板
+  // ドア上の Restroom 看板（壁より低くして、同じ通路に入るまで見えないようにする）
   const restroomSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 0.7),
+    new THREE.PlaneGeometry(1.8, 0.52),
     new THREE.MeshBasicMaterial({ map: assets.signTex.restroom, transparent: true }),
   );
-  restroomSign.position.set(goalWp.x, WALL_H + 0.6, goalWp.z - CELL / 2 + 0.12);
+  restroomSign.position.set(goalWp.x, 2.16, goalWp.z - CELL / 2 + 0.12);
   group.add(restroomSign);
-  // ゴール強照明
-  const goalLight = new THREE.PointLight(0xfff0c8, 2.0, 6);
+  // ゴール照明（発見前は控えめ。発見時に updateGoalDiscovery が強める）
+  const goalLight = new THREE.PointLight(0xfff0c8, 1.2, 3.4);
   goalLight.position.set(goalWp.x, 1.7, goalWp.z - 0.3);
   group.add(goalLight);
-  // ゴール床マーカー（緑光）
+  // ゴール床マーカー（控えめ）
   const goalFloor = new THREE.Mesh(
     new THREE.CircleGeometry(0.5, 24),
-    new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.5 }),
+    new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.28 }),
   );
   goalFloor.rotation.x = -Math.PI / 2;
   goalFloor.position.set(goalWp.x, 0.03, goalWp.z);
   group.add(goalFloor);
+  group.userData.goalRefs = { light: goalLight, sign: restroomSign, floor: goalFloor };
+
+  // --- 案内板（探索の手がかり） ---
+  // 分岐セルの壁面に駅構内図を貼る。近づくとトイレの方角ヒントが出る。
+  const boardCells = [];
+  const cellDegree = (c) => DIRS.reduce((sum, dir) => sum + (isWall(stage, c.x + dir.dx, c.z + dir.dz) ? 0 : 1), 0);
+  const startKeyForBoards = cellKey(stage.start.x, stage.start.z);
+  const goalKeyForBoards = cellKey(stage.goal.x, stage.goal.z);
+  const junctionCells = stage.open.filter((c) => {
+    const key = cellKey(c.x, c.z);
+    if (key === startKeyForBoards || key === goalKeyForBoards) return false;
+    return cellDegree(c) >= 3 && stationMountForCell(stage, c, c.x + c.z);
+  });
+  const boardBudget = 5 + Math.floor(stage.index / 2);
+  junctionCells
+    .sort((a, b) => ((a.x * 13 + a.z * 7) % 17) - ((b.x * 13 + b.z * 7) % 17))
+    .forEach((c) => {
+      if (boardCells.length >= boardBudget) return;
+      const tooClose = boardCells.some((b) => Math.abs(b.x - c.x) + Math.abs(b.z - c.z) < 6);
+      if (tooClose) return;
+      boardCells.push(c);
+    });
+  group.userData.hintBoards = boardCells.map((c) => ({ x: c.x, z: c.z }));
+  boardCells.forEach((c, i) => {
+    const mount = stationMountForCell(stage, c, c.x + c.z);
+    if (!mount) return;
+    addWallPlane(group, assets.signTex.stationMap, mount, 1.2, 0.72, 1.18, 0.05);
+    const frame = addOrientedBox(
+      group,
+      new THREE.BoxGeometry(1.32, 0.08, 0.06),
+      voxelMat(0x2fbf71, { emissive: 0x2fbf71, emissiveIntensity: 0.85 }),
+      mount, 1.62, 0.04,
+    );
+    frame.castShadow = false;
+    const marker = new THREE.Mesh(
+      new THREE.CircleGeometry(0.34, 20),
+      new THREE.MeshBasicMaterial({ color: 0x2fbf71, transparent: true, opacity: 0.3, depthWrite: false }),
+    );
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.set(c.x * CELL + CELL / 2, 0.028, c.z * CELL + CELL / 2);
+    group.add(marker);
+  });
 
   // --- スタート床マーカー（緑） ---
   const sp = gridToWorld(stage.start.x, stage.start.z);
@@ -1133,7 +1224,8 @@ function addStationDecor(group, stage, path, accentColor) {
       if (i % 4 === 0) {
         addVendingMachine(group, mount, [assets.signTex.vendingBlue, assets.signTex.vendingGreen, assets.signTex.vendingRed][i % 3]);
       } else if (i % 4 === 1) {
-        addWallPlane(group, i % 2 === 0 ? assets.signTex.stationMap : assets.signTex.nextTrain, mount, 1.05, 0.62, 0.82, 0.045);
+        // 駅構内図（stationMap）は案内板専用にしたので、装飾は発車標のみ
+        addWallPlane(group, assets.signTex.nextTrain, mount, 1.05, 0.62, 0.82, 0.045);
       } else if (i % 4 === 2) {
         addTicketGate(group, mount, accentColor);
       } else {
@@ -1142,15 +1234,14 @@ function addStationDecor(group, stage, path, accentColor) {
     });
   }
 
+  // 天井灯は経路と無関係のグリッド配置にする（最短経路のネタバレ防止）
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff2b4 });
   const railMat = new THREE.MeshStandardMaterial({ color: 0x1d2b39, roughness: 0.55, metalness: 0.25 });
   const lampGeo = new THREE.BoxGeometry(CELL * 0.9, 0.055, 0.16);
   const beamGeo = new THREE.BoxGeometry(CELL * 0.08, 0.08, CELL * 0.94);
-  for (let i = 2; i < path.length - 1; i += 4) {
-    const c = path[i];
-    const next = path[i + 1] || c;
-    const prev = path[i - 1] || c;
-    const alongZ = Math.abs(next.z - prev.z) > Math.abs(next.x - prev.x);
+  stage.open.forEach((c) => {
+    if (c.x % 5 !== 2 || c.z % 4 !== 2) return;
+    const alongZ = (c.x + c.z) % 2 === 0;
     const lamp = new THREE.Mesh(lampGeo, lampMat);
     lamp.position.set(c.x * CELL + CELL / 2, 4.18, c.z * CELL + CELL / 2);
     if (alongZ) lamp.rotation.y = Math.PI / 2;
@@ -1160,7 +1251,7 @@ function addStationDecor(group, stage, path, accentColor) {
     beam.position.set(c.x * CELL + CELL / 2, 4.08, c.z * CELL + CELL / 2);
     if (!alongZ) beam.rotation.y = Math.PI / 2;
     group.add(beam);
-  }
+  });
 
   const panelMat = new THREE.MeshStandardMaterial({
     color: accentColor.clone().lerp(new THREE.Color(0x111821), 0.28),
@@ -1205,28 +1296,154 @@ function addStationDecor(group, stage, path, accentColor) {
 }
 
 // ===== リグ付き3Dキャラクター =====
+// スキンウェイト（支配ボーン）＋バインドポーズ座標から頂点カラーで「服」を塗る。
+// 部位: skin(手) / head(顔・髪) / arms(袖) / torso(上着) / hips(腰) / thigh / calf / shoes
+// torso 前面中央は shirt / tie（ワイシャツとネクタイ）に塗り分ける。
 const RIGGED_CHARACTER_STYLES = {
-  player: {
-    body: 0x203f63, hair: 0x17191b, jacket: 0x193f69, shirt: 0xf2efe6,
-    tie: 0xc8443c, accent: 0xd9aa28,
+  player: { // 主人公: 紺スーツのサラリーマン
+    skin: 0xeab98b, hair: 0x23262a, torso: 0x2e4d7b, arms: 0x2e4d7b, hips: 0x27406b,
+    thigh: 0x27406b, calf: 0x233a5f, shoes: 0x23262b, shirt: 0xf5f2e8, tie: 0xd2483c,
+    prop: "briefcase", propColor: 0x513a28,
   },
-  business: {
-    body: 0x343a42, hair: 0x30241e, jacket: 0x343a42, shirt: 0xeee9dc,
-    tie: 0x8f2f2b, accent: 0x3a281d,
+  business: { // 通行人: チャコールスーツのサラリーマン
+    skin: 0xe6b48a, hair: 0x574536, torso: 0x484f5b, arms: 0x484f5b, hips: 0x3e444e,
+    thigh: 0x3e444e, calf: 0x3a4048, shoes: 0x22252a, shirt: 0xf1ece0, tie: 0x35608e,
+    prop: "briefcase", propColor: 0x3a2c20,
   },
-  ol: {
-    body: 0x7a637f, hair: 0x4a3026, jacket: 0x775d8c, shirt: 0xf3ede4,
-    tie: 0x315f86, accent: 0xc79065,
+  ol: { // 通行人: OL（ブラウス＋ダークスカート）
+    skin: 0xeec39a, hair: 0x59392b, torso: 0xf0e9dc, arms: 0xf0e9dc, hips: 0x39404e,
+    thigh: 0x39404e, calf: 0xdcbd9a, shoes: 0x2e3138, shirt: 0xf0e9dc, tie: 0xc4574e,
+    prop: "handbag", propColor: 0x9c5a3c,
   },
-  student: {
-    body: 0x315d56, hair: 0x1e2c32, jacket: 0x315d56, shirt: 0xeef2df,
-    tie: 0xd8aa36, accent: 0x2f5f82,
+  student: { // 通行人: 学生（緑ブレザー）
+    skin: 0xefc79e, hair: 0x2c2622, torso: 0x3c5a49, arms: 0x3c5a49, hips: 0x565e69,
+    thigh: 0x565e69, calf: 0x565e69, shoes: 0x2c2f35, shirt: 0xf2f0e4, tie: 0xc03a38,
+    prop: "handbag", propColor: 0x31465c,
   },
-  traveler: {
-    body: 0x9b5638, hair: 0x806344, jacket: 0x9b5638, shirt: 0xefe3d2,
-    tie: 0x2e7f70, accent: 0x8a623c,
+  traveler: { // 通行人: 帽子のおじさん（ベスト＋白髪交じり）
+    skin: 0xdfae83, hair: 0x9a9184, torso: 0x8a7a5c, arms: 0xe9e2cf, hips: 0x51493c,
+    thigh: 0x51493c, calf: 0x4c443a, shoes: 0x33302b, shirt: 0xe9e2cf, tie: 0x5e7a5a,
+    prop: "hat", propColor: 0x5a4632,
   },
 };
+
+function partForBone(name) {
+  const n = (name || "").toLowerCase();
+  if (/hand|thumb|index|middle|ring|pinky/.test(n)) return "skin";
+  if (n === "head" || n.includes("neck")) return "head";
+  if (/clavicle|upperarm|lowerarm/.test(n)) return "arms";
+  if (n.includes("spine_01") || n.includes("pelvis")) return "hips";
+  if (n.includes("spine")) return "torso";
+  if (n.includes("thigh")) return "thigh";
+  if (n.includes("calf")) return "calf";
+  if (/foot|ball/.test(n)) return "shoes";
+  return "torso";
+}
+
+const riggedPaintMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffffff, vertexColors: true, roughness: 0.74, metalness: 0.02,
+});
+const paintedGeometryCache = new Map();
+
+function paintedGeometryFor(object, type, style) {
+  const key = `${type}:${object.name}`;
+  if (paintedGeometryCache.has(key)) return paintedGeometryCache.get(key);
+  const geo = object.geometry.clone();
+  const pos = geo.attributes.position;
+  const skinIndex = geo.attributes.skinIndex;
+  const skinWeight = geo.attributes.skinWeight;
+  const bones = object.skeleton.bones;
+  geo.computeBoundingBox();
+  const minY = geo.boundingBox.min.y;
+  const bodyHeight = Math.max(geo.boundingBox.max.y - minY, 0.0001);
+  const colors = new Float32Array(pos.count * 3);
+  const color = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    let boneIndex = 0;
+    let bestWeight = -1;
+    for (let k = 0; k < 4; k++) {
+      const w = skinWeight.getComponent(i, k);
+      if (w > bestWeight) { bestWeight = w; boneIndex = skinIndex.getComponent(i, k); }
+    }
+    const part = partForBone(bones[boneIndex]?.name);
+    const yRatio = (pos.getY(i) - minY) / bodyHeight;
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    let hex;
+    if (part === "head") {
+      // 頭頂と後頭部を髪にする（バインドポーズ前方= +Z 前提）
+      if (yRatio > 0.945 || (yRatio > 0.885 && z < -0.012)) hex = style.hair;
+      else hex = style.skin;
+    } else if (part === "torso") {
+      // 胸元中央にワイシャツのVゾーンとネクタイ
+      if (z > 0.045 && yRatio > 0.60 && yRatio < 0.83 && Math.abs(x) < 0.085) {
+        hex = Math.abs(x) < 0.03 ? style.tie : style.shirt;
+      } else {
+        hex = style.torso;
+      }
+    } else {
+      hex = style[part] ?? style.torso;
+    }
+    color.setHex(hex);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  paintedGeometryCache.set(key, geo);
+  return geo;
+}
+
+// ボーンに直付けする小物（歩行アニメに追従する）
+function attachCharacterProps(model, type, style) {
+  const propMat = new THREE.MeshStandardMaterial({ color: style.propColor, roughness: 0.62, metalness: 0.05 });
+  const boneWorldScale = new THREE.Vector3();
+  const addToBone = (boneName, build, offset) => {
+    const bone = model.getObjectByName(boneName);
+    if (!bone) return null;
+    bone.getWorldScale(boneWorldScale);
+    const inv = 1 / (boneWorldScale.y || 1);
+    const prop = build();
+    prop.scale.multiplyScalar(inv);
+    prop.position.copy(offset).multiplyScalar(inv);
+    bone.add(prop);
+    return prop;
+  };
+  if (style.prop === "briefcase") {
+    addToBone("hand_r", () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 0.075), propMat);
+      g.add(body);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.03), propMat);
+      handle.position.y = 0.145;
+      g.add(handle);
+      return g;
+    }, new THREE.Vector3(0, 0.22, 0));
+  } else if (style.prop === "handbag") {
+    addToBone("hand_l", () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.17, 0.09), propMat);
+      g.add(body);
+      return g;
+    }, new THREE.Vector3(0, 0.18, 0));
+  } else if (style.prop === "hat") {
+    addToBone("Head", () => {
+      const g = new THREE.Group();
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.125, 0.11, 16), propMat);
+      g.add(crown);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.175, 0.175, 0.022, 16), propMat);
+      brim.position.y = -0.05;
+      g.add(brim);
+      const band = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.122, 0.128, 0.035, 16),
+        new THREE.MeshStandardMaterial({ color: 0x2e2a24, roughness: 0.7 }),
+      );
+      band.position.y = -0.03;
+      g.add(band);
+      return g;
+    }, new THREE.Vector3(0, 0.155, 0));
+  }
+}
 
 function createCharacter(type, targetHeight = PLAYER_H) {
   if (!assets.riggedCharacter || assets.animationClips.length === 0) {
@@ -1241,16 +1458,10 @@ function createCharacter(type, targetHeight = PLAYER_H) {
     object.castShadow = true;
     object.receiveShadow = true;
     object.frustumCulled = false;
-    const hasMaterialArray = Array.isArray(object.material);
-    const materials = hasMaterialArray ? object.material : [object.material];
-    const nextMaterials = materials.map((source) => {
-      const next = source.clone();
-      if (next.color) next.color.set(style.body);
-      next.roughness = 0.72;
-      next.metalness = 0.02;
-      return next;
-    });
-    object.material = hasMaterialArray ? nextMaterials : nextMaterials[0];
+    if (object.isSkinnedMesh) {
+      object.geometry = paintedGeometryFor(object, type, style);
+      object.material = riggedPaintMaterial;
+    }
   });
   model.scale.setScalar(targetHeight / 1.8);
   model.updateMatrixWorld(true);
@@ -1258,7 +1469,7 @@ function createCharacter(type, targetHeight = PLAYER_H) {
   model.position.y -= bounds.min.y;
   root.add(model);
 
-  addRiggedCharacterStyle(root, type, targetHeight, style);
+  attachCharacterProps(model, type, style);
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(type === "player" ? 0.38 : 0.32, 28),
@@ -1295,54 +1506,6 @@ function createCharacter(type, targetHeight = PLAYER_H) {
   root.userData.shadow = shadow;
   state.characterMixers.push(mixer);
   return root;
-}
-
-function addRiggedCharacterStyle(root, type, height, style) {
-  const mat = (color, options = {}) => new THREE.MeshStandardMaterial({
-    color,
-    roughness: options.roughness ?? 0.68,
-    metalness: options.metalness ?? 0.02,
-    emissive: options.emissive ?? 0x000000,
-    emissiveIntensity: options.emissiveIntensity ?? 0,
-  });
-  const addPart = (geometry, partMaterial, x, y, z) => {
-    const mesh = new THREE.Mesh(geometry, partMaterial);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    root.add(mesh);
-    return mesh;
-  };
-  const box = (w, h, d, partMaterial, x, y, z) => addPart(new THREE.BoxGeometry(w, h, d), partMaterial, x, y, z);
-  const jacketMat = mat(style.jacket);
-  const hairMat = mat(style.hair, { roughness: 0.86 });
-  const shirtMat = mat(style.shirt);
-  const tieMat = mat(style.tie);
-  const accentMat = mat(style.accent, type === "player" ? { emissive: style.accent, emissiveIntensity: 0.18 } : {});
-
-  const hair = addPart(new THREE.SphereGeometry(0.19, 18, 10), hairMat, 0, height * 0.925, 0);
-  hair.scale.set(1.05, 0.55, 1);
-  box(0.48, 0.52, 0.28, jacketMat, 0, height * 0.61, 0);
-  box(0.13, 0.36, 0.035, shirtMat, 0, height * 0.63, 0.158);
-  box(0.045, 0.28, 0.045, tieMat, 0, height * 0.62, 0.19);
-
-  if (type === "player") {
-    [-0.11, 0, 0.11].forEach((x, index) => {
-      const spike = addPart(new THREE.ConeGeometry(0.065, 0.2, 7), hairMat, x, height * 0.98 + Math.abs(index - 1) * 0.015, -0.015);
-      spike.rotation.z = (index - 1) * -0.38;
-    });
-    box(0.38, 0.43, 0.14, accentMat, 0, height * 0.61, -0.19);
-    box(0.22, 0.17, 0.035, shirtMat, 0, height * 0.61, -0.27);
-  } else if (type === "business") {
-    box(0.38, 0.34, 0.12, accentMat, 0.42, height * 0.31, 0.02);
-  } else if (type === "ol") {
-    box(0.21, 0.26, 0.12, accentMat, -0.42, height * 0.62, 0.04);
-  } else if (type === "student") {
-    box(0.43, 0.48, 0.18, accentMat, 0, height * 0.62, -0.22);
-  } else if (type === "traveler") {
-    box(0.34, 0.58, 0.24, accentMat, 0.5, height * 0.31, 0);
-    box(0.06, 0.46, 0.06, mat(0x73828a, { metalness: 0.55 }), 0.5, height * 0.75, 0);
-  }
 }
 
 function setCharacterMotion(character, motion, fade = 0.18) {
@@ -1456,6 +1619,8 @@ const state = {
   dodgeId: 0,
   dodgeSuccessTimer: 0,
   messageTimer: 0,
+  goalFound: false,
+  hintCooldown: 0,
   paused: false,
   perfFrames: 0,
   perfElapsed: 0,
@@ -1592,6 +1757,11 @@ function startStage(index) {
     if (boardStatus) boardStatus.textContent = `STAGE ${index + 1} LOCKED`;
     return;
   }
+
+  // ゴール位置を毎ラン抽選（迷路を探索してトイレを見つけるゲームにする）
+  pickStageGoal(stage);
+  state.goalFound = false;
+  state.hintCooldown = 0;
 
   if (state.stageObj) scene.remove(state.stageObj);
   state.stageObj = buildStage(stage);
@@ -1839,6 +2009,7 @@ function tick(now) {
     updateTimerAndDignity(dt);
     updateHUD();
     checkCollisions();
+    updateGoalDiscovery(dt);
     checkGoal();
     updateEffects(dt);
     if (state.hitTimer > 0) state.hitTimer -= dt;
@@ -2155,12 +2326,20 @@ function updateHUD() {
   if (dignityValue) dignityValue.textContent = `${Math.round(Math.max(0, Math.min(100, state.dignity)))}%`;
   const stage = STAGES[state.stageIndex];
   if (hud) hud.classList.toggle("danger", state.timeLeft <= 10 || state.dignity <= 30);
-  const totalDist = Math.hypot(stage.goal.x - stage.start.x, stage.goal.z - stage.start.z);
-  const curDist = Math.hypot(stage.goal.x - (state.player.x - 0.5), stage.goal.z - (state.player.z - 0.5));
-  const pct = totalDist > 0 ? (1 - curDist / totalDist) * 100 : 0;
-  const clampedPct = Math.max(0, Math.min(100, pct));
-  if (distanceFill) distanceFill.style.width = `${clampedPct}%`;
-  if (distanceValue) distanceValue.textContent = `トイレまで ${Math.max(0, Math.round(100 - clampedPct))}%`;
+  // トイレゲージは「扉を目視で発見」するまで機能しない（探索ゲーム性）
+  if (!state.goalFound) {
+    if (distanceFill) distanceFill.style.width = "0%";
+    if (distanceValue) distanceValue.textContent = "トイレ ？？？（案内板を探せ）";
+    routeHud?.classList.add("searching");
+  } else {
+    routeHud?.classList.remove("searching");
+    const totalDist = Math.hypot(stage.goal.x - stage.start.x, stage.goal.z - stage.start.z);
+    const curDist = Math.hypot(stage.goal.x - (state.player.x - 0.5), stage.goal.z - (state.player.z - 0.5));
+    const pct = totalDist > 0 ? (1 - curDist / totalDist) * 100 : 0;
+    const clampedPct = Math.max(0, Math.min(100, pct));
+    if (distanceFill) distanceFill.style.width = `${clampedPct}%`;
+    if (distanceValue) distanceValue.textContent = `トイレまで ${Math.max(0, Math.round(100 - clampedPct))}%`;
+  }
   if (facePortrait) {
     let src = "./assets/sprites/face-normal.png";
     if (state.dignity < 30) src = "./assets/sprites/face-limit.png";
@@ -2263,6 +2442,25 @@ function updateEffects(dt) {
   state.effects = state.effects.filter((fx) => {
     fx.userData.age += dt;
     const t = Math.min(fx.userData.age / fx.userData.ttl, 1);
+    if (fx.userData.kind === "hintArrow") {
+      // プレイヤーの頭上に追従し、方角（ワールドyaw）は保ったまま浮遊・フェード
+      const px = state.playerObj?.position.x ?? fx.position.x;
+      const pz = state.playerObj?.position.z ?? fx.position.z;
+      fx.position.set(px, PLAYER_H + 0.75 + Math.sin(fx.userData.age * 5.2) * 0.06, pz);
+      const fade = t < 0.15 ? t / 0.15 : (t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1);
+      fx.children.forEach((child) => {
+        if (child.material?.opacity !== undefined) child.material.opacity = fade * 0.95;
+      });
+      if (t >= 1) {
+        scene.remove(fx);
+        fx.traverse((obj) => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) obj.material.dispose();
+        });
+        return false;
+      }
+      return true;
+    }
     const e = easeOut(t);
     fx.scale.setScalar(1 + e * 2.15);
     fx.rotation.y += dt * 4;
@@ -2302,6 +2500,93 @@ function checkGoal() {
   if (d2 < 0.55 * 0.55) clearStage();
 }
 
+// グリッド座標系での視線判定（壁を挟まず見えるか）
+function hasLineOfSight(stage, fromX, fromZ, toX, toZ, maxDist) {
+  const dx = toX - fromX;
+  const dz = toZ - fromZ;
+  const dist = Math.hypot(dx, dz);
+  if (dist > maxDist) return false;
+  const steps = Math.max(2, Math.ceil(dist / 0.22));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (isWall(stage, Math.floor(fromX + dx * t), Math.floor(fromZ + dz * t))) return false;
+  }
+  return true;
+}
+
+// カメラ基準の方角ラベル（プレイヤーに actionable なヒントを返す）
+function directionLabel(dx, dz) {
+  const worldYaw = Math.atan2(dx, dz);
+  const relative = angleDelta(state.cameraYaw + Math.PI, worldYaw);
+  const octant = Math.round(relative / (Math.PI / 4));
+  const names = ["前方", "右前", "右", "右後ろ", "後方", "左後ろ", "左", "左前"];
+  return names[((octant % 8) + 8) % 8];
+}
+
+function spawnHintArrow(dx, dz) {
+  const group = new THREE.Group();
+  group.userData.age = 0;
+  group.userData.ttl = 2.1;
+  group.userData.kind = "hintArrow";
+  const yaw = Math.atan2(dx, dz);
+  const px = state.playerObj?.position.x ?? 0;
+  const pz = state.playerObj?.position.z ?? 0;
+  group.position.set(px, PLAYER_H + 0.75, pz);
+  group.rotation.y = yaw;
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x2fbf71, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false,
+  });
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 4), mat);
+  head.rotation.x = Math.PI / 2;
+  head.position.z = 0.34;
+  head.renderOrder = 14;
+  group.add(head);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.4), mat);
+  tail.position.z = 0.02;
+  tail.renderOrder = 14;
+  group.add(tail);
+  scene.add(group);
+  state.effects.push(group);
+}
+
+function updateGoalDiscovery(dt) {
+  const stage = STAGES[state.stageIndex];
+  if (state.hintCooldown > 0) state.hintCooldown = Math.max(0, state.hintCooldown - dt);
+
+  // 案内板: 近づくとトイレの方角ヒント
+  const boards = state.stageObj?.userData.hintBoards || [];
+  if (state.hintCooldown <= 0 && !state.goalFound) {
+    for (const board of boards) {
+      const d2 = (state.player.x - (board.x + 0.5)) ** 2 + (state.player.z - (board.z + 0.5)) ** 2;
+      if (d2 < 1.15 * 1.15) {
+        state.hintCooldown = 3.2;
+        const dx = stage.goal.x + 0.5 - state.player.x;
+        const dz = stage.goal.z + 0.5 - state.player.z;
+        state.messageTimer = 2.6;
+        if (boardStatus) boardStatus.textContent = `案内板: トイレは${directionLabel(dx, dz)}`;
+        spawnHintArrow(dx, dz);
+        break;
+      }
+    }
+  }
+
+  // 扉の目視発見
+  if (!state.goalFound && hasLineOfSight(
+    stage, state.player.x, state.player.z, stage.goal.x + 0.5, stage.goal.z + 0.5, 5.4,
+  )) {
+    state.goalFound = true;
+    state.messageTimer = 2.4;
+    if (boardStatus) boardStatus.textContent = "トイレの扉を発見！ 駆け込め！";
+    const refs = state.stageObj?.userData.goalRefs;
+    if (refs) {
+      refs.light.intensity = 3.2;
+      refs.light.distance = 9;
+      refs.floor.material.opacity = 0.55;
+    }
+    if (state.runStats) state.runStats.foundAt = Math.max(0, state.timeLeft);
+  }
+}
+
 function clearStage() {
   state.mode = "clear";
   const rank = updateProgressAfterClear();
@@ -2331,7 +2616,7 @@ function showOverlay(type, opts = {}) {
   if (type === "title") {
     if (screenTitle) screenTitle.innerHTML = "TOILET<span>我慢ゲーム</span>";
     if (screenKicker) screenKicker.textContent = "DIGNITY ESCAPE MISSION";
-    if (screenCopy) screenCopy.textContent = "人波を読み、限界までに扉へ辿り着け。ホームからトイレ前まで、5つの駅区画を走り抜ける尊厳防衛タイムアタック。";
+    if (screenCopy) screenCopy.textContent = "トイレの場所は毎回変わる。案内板を読み、人波をかわし、限界までに扉を探し出せ。5つの駅迷宮を走り抜ける尊厳防衛アクション。";
     if (screenActions) screenActions.innerHTML = `<button class="primary" data-action="start">STAGE 01 を開始</button>`;
     buildStageList();
   } else if (type === "clear") {
@@ -2418,7 +2703,9 @@ function resultSnapshot(opts = {}) {
     steps: stats.steps ?? 0,
     turns: stats.turns ?? 0,
     wallBumps: stats.wallBumps ?? 0,
-    progress: opts.next !== undefined && state.mode === "clear" ? "100%" : `${progress}%`,
+    progress: opts.next !== undefined && state.mode === "clear"
+      ? "100%"
+      : (state.goalFound ? `${progress}%` : "扉未発見"),
     rank: opts.rank || calculateRunRank(stage, stats, state.timeLeft),
   };
 }
@@ -2449,10 +2736,12 @@ function resultNarrative(type, opts = {}) {
   const stats = resultSnapshot(opts);
   if (type === "clear") {
     const tone = stats.hits === 0 ? "誰にもぶつからず" : `${stats.hits}回接触しながらも`;
-    return `${stage.name}を${tone}突破。黄色い誘導ラインを拾い、トイレドアへ滑り込んだ。`;
+    return `${stage.name}を${tone}突破。案内板を読み解き、トイレドアへ滑り込んだ。`;
   }
   if ((opts.reason || state.runStats?.lastCause) === "time") {
-    return `${stage.name}で足止め。曲がり角を読み切れず、残り時間が0になった。`;
+    return state.goalFound
+      ? `${stage.name}で足止め。扉は見えていたのに、残り時間が0になった。`
+      : `${stage.name}で迷った。扉を見つけられないまま、残り時間が0になった。`;
   }
   return `${stage.name}で人波と交錯。我慢ゲージが0になり、リトライが必要になった。`;
 }
@@ -2466,9 +2755,9 @@ function resultLogItems(type, opts, stage, stats) {
     ];
   }
   return [
-    `到達率 ${stats.progress}。扉まではまだ距離が残っている。`,
+    state.goalFound ? `到達率 ${stats.progress}。扉まではまだ距離が残っている。` : "扉は未発見のまま。緑の案内板が方角を教えてくれる。",
     `接触 ${stats.hits}回 / 回避成功 ${stats.dodges}回 / 壁接触 ${stats.wallBumps}回。`,
-    "次は曲がる前に一拍置き、通行人の赤リングを見てから進む。",
+    "次は分岐で案内板に寄り、方角を確かめてから進む。",
   ];
 }
 
@@ -2664,6 +2953,11 @@ async function bootstrap() {
     if (localTestParams?.get("testGoal") === "1") {
       state.player.x = stage.goal.x + 0.5;
       state.player.z = stage.goal.z + 0.5;
+    }
+    if (localTestParams?.get("testNearGoal") === "1") {
+      // ゴール扉の手前に立たせ、目視発見の演出を確認する
+      state.player.x = stage.goal.x + 0.5;
+      state.player.z = stage.goal.z + 1.4;
     }
     if (localTestParams?.get("testHit") === "1" && state.enemies[0]) {
       state.enemies[0].x = state.player.x;
