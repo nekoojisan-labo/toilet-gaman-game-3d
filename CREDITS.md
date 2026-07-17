@@ -1,5 +1,26 @@
 # Asset Credits
 
+## UI Fonts
+
+- Font: Noto Sans JP
+- Source: https://github.com/google/fonts/tree/main/ofl/notosansjp
+- License: SIL Open Font License 1.1 (`LICENSES/NotoSansJP-OFL.txt`)
+- Use: General UI variable font plus a title-only static Black subset generated from the same source font.
+
+## Original Music
+
+- Creator and rights holder: nekoojisan
+- Production tool: Suno
+- Tracks: `Midnight Sax & Coffee` (title screen), `クロヒョウ` (all gameplay stages)
+- Authorization: The creator confirmed use in this publicly distributed game on 2026-07-17.
+- Changes: Loudness normalization and Unity WebGL import compression only.
+
+## Title Key Art
+
+- Creator: Generated specifically for the Toilet Gaman project with OpenAI image generation.
+- Use: Full-screen title image showing the protagonist rushing through a Japanese station.
+- Changes: Runtime cover crop, dark overlay, and slow camera push.
+
 ## Station Cast Characters
 
 - Character authoring tool: MPFB 2 / MakeHuman Community
