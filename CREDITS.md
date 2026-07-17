@@ -11,15 +11,22 @@
 
 - Creator and rights holder: nekoojisan
 - Production tool: Suno
-- Tracks: `Midnight Sax & Coffee` (title screen), `クロヒョウ` (all gameplay stages)
+- Tracks: `Midnight Sax & Coffee` (title screen and opening cinematic), `クロヒョウ` (all gameplay stages)
 - Authorization: The creator confirmed use in this publicly distributed game on 2026-07-17.
-- Changes: Loudness normalization and Unity WebGL import compression only.
+- Changes: Loudness normalization, opening soundtrack mix, and Unity WebGL import compression.
 
 ## Title Key Art
 
 - Creator: Generated specifically for the Toilet Gaman project with OpenAI image generation.
 - Use: Full-screen title image showing the protagonist rushing through a Japanese station.
 - Changes: Runtime cover crop, dark overlay, and slow camera push.
+
+## Opening Cinematic and Game Over Art
+
+- Creator: Generated specifically for the Toilet Gaman project with OpenAI image generation.
+- Use: Six-scene 2076 opening storyboard and the two-stage apocalyptic game-over sequence.
+- Changes: Original crops, color treatment, camera movement, typography, compositing, and timing authored for this game.
+- Authoring tool: Remotion (MIT License), used to render the 1280x720 H.264/AAC opening movie. Remotion is not shipped in the WebGL runtime.
 
 ## Station Cast Characters
 
