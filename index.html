@@ -112,12 +112,14 @@
     }
 
     var buildUrl = "Build";
-    var loaderUrl = buildUrl + "/webgl-release.loader.js";
+    var requestedBuildVersion = new URLSearchParams(window.location.search).get("v");
+    var buildVersionSuffix = "?v=" + encodeURIComponent(requestedBuildVersion || document.lastModified);
+    var loaderUrl = buildUrl + "/webgl-release.loader.js" + buildVersionSuffix;
     var config = {
       arguments: [],
-      dataUrl: buildUrl + "/webgl-release.data.unityweb",
-      frameworkUrl: buildUrl + "/webgl-release.framework.js.unityweb",
-      codeUrl: buildUrl + "/webgl-release.wasm.unityweb",
+      dataUrl: buildUrl + "/webgl-release.data.unityweb" + buildVersionSuffix,
+      frameworkUrl: buildUrl + "/webgl-release.framework.js.unityweb" + buildVersionSuffix,
+      codeUrl: buildUrl + "/webgl-release.wasm.unityweb" + buildVersionSuffix,
       streamingAssetsUrl: "StreamingAssets",
       autoSyncPersistentDataPath: true,
       companyName: "nekoojisan",
